@@ -136,6 +136,7 @@ async function generateExpressKit(options: GenerateKitOptions): Promise<{ intake
       ],
       temperature: 0.3,
       max_tokens: 4000,
+      response_format: { type: "json_object" },
     });
 
     const content = response.choices[0].message.content;
@@ -193,6 +194,7 @@ async function generateDetailedKit(intake: IntakeData): Promise<{ intake: Intake
       ],
       temperature: 0.3,
       max_tokens: 4000,
+      response_format: { type: "json_object" },
     });
 
     const content = response.choices[0].message.content;

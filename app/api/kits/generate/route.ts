@@ -34,8 +34,9 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerClient();
 
-    // Create a temporary user ID if none provided (for demo purposes)
-    const tempUserId = "00000000-0000-0000-0000-000000000000";
+    // For demo purposes, we'll use null user_id 
+    // In production, this would come from the authenticated user session
+    const tempUserId = null;
 
     let finalIntakeData: IntakeData;
     let artifacts: KitArtifacts;
