@@ -32,7 +32,7 @@ export default function Home() {
   const handlePreviewSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (roleInput.trim()) {
-      window.location.href = `/preview?role=${encodeURIComponent(roleInput.trim())}`;
+      window.location.href = `/kit?role=${encodeURIComponent(roleInput.trim())}`;
     }
   };
 
