@@ -11,7 +11,8 @@ import {
   Star, 
   ArrowLeft,
   Loader2,
-  CreditCard
+  CreditCard,
+  Lock
 } from "lucide-react";
 
 export default function CheckoutPage() {

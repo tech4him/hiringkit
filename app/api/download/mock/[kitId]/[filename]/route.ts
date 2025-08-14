@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handleMockDownload } from "@/lib/pdf/generator";
+import { handleMockDownload } from "@/lib/pdf/generator-optimized";
 
 export async function GET(
   request: NextRequest,

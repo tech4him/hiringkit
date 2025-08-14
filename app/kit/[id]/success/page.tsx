@@ -65,7 +65,8 @@ export default function SuccessPage() {
       // Download the file
       const link = document.createElement("a");
       link.href = download_url;
-      link.download = `hiring-kit-${exportType}.${exportType === "combined_pdf" ? "pdf" : "zip"}`;
+      // Don't set download attribute - let the server determine the filename
+      // This ensures the correct file extension is used
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -88,7 +89,7 @@ export default function SuccessPage() {
 
   const isPro = order?.plan_type === "pro";
   const isQaPending = order?.status === "qa_pending";
-  const isReady = order?.status === "ready" || order?.status === "paid";
+  const isReady = order?.status === "ready" || order?.status === "paid" || order?.status === "delivered";
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/client";
-import { generatePDF } from "@/lib/pdf/generator";
+import { generatePDF } from "@/lib/pdf/generator-optimized";
+import { generateExportForVercel } from "@/lib/pdf/vercel-optimized";
 
 export async function POST(
   request: NextRequest,
@@ -51,8 +52,11 @@ export async function POST(
       );
     }
 
-    // Generate PDF(s)
-    const exportResult = await generatePDF(kit, export_type);
+    // Generate PDF(s) - Use Vercel-optimized approach
+    const isVercel = process.env.VERCEL === '1';
+    const exportResult = isVercel 
+      ? await generateExportForVercel(kit, export_type)
+      : await generatePDF(kit, export_type);
 
     if (!exportResult.success) {
       return NextResponse.json(
@@ -61,56 +65,65 @@ export async function POST(
       );
     }
 
-    // Save export record
-    const { data: exportRecord, error: exportError } = await supabase
-      .from("exports")
-      .insert({
-        kit_id: kitId,
-        kind: export_type,
-        url: exportResult.url
-      })
-      .select()
-      .single();
-
-    if (exportError) {
-      console.error("Error saving export record:", exportError);
-      // Continue anyway since PDF was generated
+    // Handle async processing for Vercel
+    if (exportResult.jobId) {
+      return NextResponse.json({
+        status: "processing",
+        job_id: exportResult.jobId,
+        message: exportResult.message,
+        export_type,
+        check_url: `/api/jobs/${exportResult.jobId}/status`
+      });
     }
 
-    // If it's a ZIP export, save individual asset records
-    if (export_type === "zip" && exportResult.assets) {
-      const assetRecords = exportResult.assets.map((asset: any) => ({
-        export_id: exportRecord?.id,
-        artifact: asset.type,
-        url: asset.url
-      }));
+    // Immediate result (cached or small file)
+    if (exportResult.url) {
+      // Save export record only if not cached
+      if (exportResult.message !== "Retrieved from cache") {
+        const { data: exportRecord, error: exportError } = await supabase
+          .from("exports")
+          .insert({
+            kit_id: kitId,
+            kind: export_type,
+            url: exportResult.url
+          })
+          .select()
+          .single();
 
-      const { error: assetsError } = await supabase
-        .from("export_assets")
-        .insert(assetRecords);
+        // If it's a ZIP export, save individual asset records
+        if (export_type === "zip" && exportResult.assets && exportRecord) {
+          const assetRecords = exportResult.assets.map((asset: any) => ({
+            export_id: exportRecord.id,
+            artifact: asset.type,
+            url: asset.url
+          }));
 
-      if (assetsError) {
-        console.error("Error saving asset records:", assetsError);
+          await supabase
+            .from("export_assets")
+            .insert(assetRecords);
+        }
       }
+
+      // Update order status to delivered
+      await supabase
+        .from("orders")
+        .update({ status: "delivered" })
+        .eq("kit_id", kitId)
+        .in("status", ["ready", "paid"]);
+
+      return NextResponse.json({
+        download_url: exportResult.url,
+        export_type,
+        assets: exportResult.assets || null,
+        cached: exportResult.message === "Retrieved from cache"
+      });
     }
 
-    // Update order status to delivered
-    const { error: orderUpdateError } = await supabase
-      .from("orders")
-      .update({ status: "delivered" })
-      .eq("kit_id", kitId)
-      .eq("status", "ready")
-      .or("status.eq.paid");
-
-    if (orderUpdateError) {
-      console.error("Error updating order status:", orderUpdateError);
-    }
-
-    return NextResponse.json({
-      download_url: exportResult.url,
-      export_type,
-      assets: exportResult.assets || null
-    });
+    // Fallback
+    return NextResponse.json(
+      { error: "Unexpected export result" },
+      { status: 500 }
+    );
 
   } catch (error) {
     console.error("Export error:", error);

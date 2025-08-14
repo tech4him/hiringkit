@@ -88,11 +88,14 @@ export async function POST(request: NextRequest) {
       allow_promotion_codes: true,
     });
 
+    // Use the default organization ID if kit doesn't have one
+    const DEFAULT_ORG_ID = "bed9d5de-f609-4359-991e-8889b8b09a55";
+    
     // Create order record
     const { error: orderError } = await supabase
       .from("orders")
       .insert({
-        org_id: kit.org_id || "00000000-0000-0000-0000-000000000000", // Default org for now
+        org_id: kit.org_id || DEFAULT_ORG_ID,
         user_id: kit.user_id,
         kit_id: kit_id,
         status: "awaiting_payment",
