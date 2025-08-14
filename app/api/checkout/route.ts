@@ -1,36 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { createServerClient } from "@/lib/supabase/client";
+import { createAdminClient } from "@/lib/supabase/client";
+import { validateRequestBody, createApiResponse, createNextResponse, notFoundResponse } from "@/lib/validation/helpers";
+import { CheckoutRequestSchema } from "@/lib/validation/schemas";
+import { logError, logUserAction } from "@/lib/logger";
+import { safeGetCurrentUser, getOrganizationId } from "@/lib/auth/helpers";
+import { env } from "@/lib/config/env";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-11-20.acacia"
+const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-02-24.acacia"
 });
 
 export async function POST(request: NextRequest) {
   try {
-    const { kit_id, plan_type = "solo", success_url, cancel_url } = await request.json();
-
-    if (!kit_id) {
-      return NextResponse.json(
-        { error: "Kit ID is required" },
-        { status: 400 }
-      );
+    // Validate request body
+    const validationResult = await validateRequestBody(request, CheckoutRequestSchema);
+    if (!validationResult.success) {
+      return createNextResponse(validationResult.error, 400);
     }
 
-    const supabase = createServerClient();
+    const { kit_id, plan_type, success_url, cancel_url } = validationResult.data;
 
-    // Get kit details
-    const { data: kit, error: kitError } = await supabase
+    logUserAction('CHECKOUT_SESSION_REQUEST', undefined, {
+      kitId: kit_id,
+      planType: plan_type,
+    });
+
+    // Get current user (optional for guest checkout)
+    const currentUser = await safeGetCurrentUser();
+
+    const supabase = createAdminClient();
+
+    // Get kit details with access control
+    let kitQuery = supabase
       .from("kits")
       .select("*")
-      .eq("id", kit_id)
-      .single();
+      .eq("id", kit_id);
+
+    // If user is authenticated, check ownership or allow if admin
+    if (currentUser) {
+      // Admin can checkout any kit, otherwise check ownership
+      if (currentUser.role !== 'admin') {
+        kitQuery = kitQuery.eq("user_id", currentUser.id);
+      }
+    }
+
+    const { data: kit, error: kitError } = await kitQuery.single();
 
     if (kitError || !kit) {
-      return NextResponse.json(
-        { error: "Kit not found" },
-        { status: 404 }
-      );
+      logError(new Error('Kit not found or access denied'), {
+        context: 'checkout_kit_access',
+        kitId: kit_id,
+        userId: currentUser?.id,
+      });
+      return notFoundResponse('Kit not found');
     }
 
     // Define pricing
@@ -47,13 +70,33 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    const selectedPlan = pricing[plan_type as keyof typeof pricing];
-    
-    if (!selectedPlan) {
-      return NextResponse.json(
-        { error: "Invalid plan type" },
-        { status: 400 }
-      );
+    const selectedPlan = pricing[plan_type];
+
+    // Get organization ID properly
+    const orgId = await getOrganizationId(request, currentUser);
+    if (!orgId && !currentUser) {
+      // For guest checkout, create a temporary organization
+      const { data: guestOrg, error: orgError } = await supabase
+        .from("organizations")
+        .insert({
+          name: "Guest Checkout",
+        })
+        .select()
+        .single();
+
+      if (orgError) {
+        logError(new Error(orgError.message), {
+          context: 'guest_org_creation',
+          kitId: kit_id,
+        });
+        return createNextResponse({
+          success: false,
+          error: {
+            code: 'ORG_CREATION_ERROR',
+            message: 'Failed to create guest organization',
+          },
+        }, 500);
+      }
     }
 
     // Create Stripe checkout session
@@ -65,7 +108,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         kit_id,
         plan_type,
-        user_id: kit.user_id
+        user_id: kit.user_id || currentUser?.id || 'guest',
       },
       line_items: [
         {
@@ -86,17 +129,15 @@ export async function POST(request: NextRequest) {
       ],
       billing_address_collection: "auto",
       allow_promotion_codes: true,
+      customer_email: currentUser?.email,
     });
 
-    // Use the default organization ID if kit doesn't have one
-    const DEFAULT_ORG_ID = "bed9d5de-f609-4359-991e-8889b8b09a55";
-    
     // Create order record
     const { error: orderError } = await supabase
       .from("orders")
       .insert({
-        org_id: kit.org_id || DEFAULT_ORG_ID,
-        user_id: kit.user_id,
+        org_id: orgId || kit.org_id,
+        user_id: kit.user_id || currentUser?.id,
         kit_id: kit_id,
         status: "awaiting_payment",
         stripe_session_id: session.id,
@@ -104,20 +145,57 @@ export async function POST(request: NextRequest) {
       });
 
     if (orderError) {
-      console.error("Error creating order:", orderError);
-      return NextResponse.json(
-        { error: "Failed to create order" },
-        { status: 500 }
-      );
+      logError(new Error(orderError.message), {
+        context: 'checkout_order_creation',
+        kitId: kit_id,
+        userId: currentUser?.id,
+        sessionId: session.id,
+      });
+      
+      return createNextResponse({
+        success: false,
+        error: {
+          code: 'ORDER_CREATION_ERROR',
+          message: 'Failed to create order',
+        },
+      }, 500);
     }
 
-    return NextResponse.json({ url: session.url });
+    if (currentUser) {
+      logUserAction('CHECKOUT_INITIATED', currentUser.id, {
+        kitId: kit_id,
+        planType: plan_type,
+        amount: selectedPlan.amount,
+        sessionId: session.id,
+      });
+    }
+
+    logUserAction('CHECKOUT_SESSION_CREATED', currentUser?.id, {
+      kitId: kit_id,
+      sessionId: session.id,
+      planType: plan_type,
+      amount: selectedPlan.amount,
+    });
+
+    const response = createApiResponse({
+      url: session.url,
+      session_id: session.id,
+    }, 'Checkout session created successfully');
+
+    return createNextResponse(response);
 
   } catch (error) {
-    console.error("Checkout error:", error);
-    return NextResponse.json(
-      { error: "Failed to create checkout session" },
-      { status: 500 }
-    );
+    logError(error as Error, {
+      context: 'checkout_route',
+      path: request.nextUrl.pathname,
+    });
+    
+    return createNextResponse({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Failed to create checkout session',
+      },
+    }, 500);
   }
 }

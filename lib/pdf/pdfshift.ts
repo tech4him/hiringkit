@@ -1,4 +1,6 @@
 import { Kit, KitArtifacts } from "@/types";
+import { env, isDevelopment } from "@/lib/config/env";
+import { logError, logPerformance } from "@/lib/logger";
 
 interface PDFShiftOptions {
   source: string; // HTML content
@@ -16,10 +18,22 @@ interface PDFShiftOptions {
 }
 
 export async function generatePDFWithPDFShift(html: string, options: Partial<PDFShiftOptions> = {}): Promise<Buffer> {
-  const apiKey = process.env.PDFSHIFT_API_KEY;
+  const startTime = Date.now();
+  
+  // In development, return mock PDF
+  if (isDevelopment()) {
+    logPerformance('PDF_GENERATION_MOCK', Date.now() - startTime, {
+      mode: 'development',
+      htmlLength: html.length,
+    });
+    
+    return generateMockPDF(html);
+  }
+
+  const apiKey = env.PDFSHIFT_API_KEY;
   
   if (!apiKey) {
-    throw new Error("PDFSHIFT_API_KEY is not configured");
+    throw new Error("PDFSHIFT_API_KEY is not configured for production");
   }
 
   const pdfOptions: PDFShiftOptions = {
@@ -46,15 +60,89 @@ export async function generatePDFWithPDFShift(html: string, options: Partial<PDF
 
     if (!response.ok) {
       const error = await response.text();
+      logError(new Error(`PDFShift API error: ${response.status} - ${error}`), {
+        context: 'pdfshift_api_call',
+        status: response.status,
+        htmlLength: html.length,
+      });
       throw new Error(`PDFShift API error: ${response.status} - ${error}`);
     }
 
     const pdfBuffer = Buffer.from(await response.arrayBuffer());
+    
+    logPerformance('PDF_GENERATION_PDFSHIFT', Date.now() - startTime, {
+      mode: 'production',
+      htmlLength: html.length,
+      pdfSize: pdfBuffer.length,
+    });
+    
     return pdfBuffer;
   } catch (error) {
-    console.error("PDFShift generation error:", error);
+    logError(error as Error, {
+      context: 'pdfshift_generation',
+      htmlLength: html.length,
+    });
     throw error;
   }
+}
+
+// Generate mock PDF for development
+function generateMockPDF(html: string): Buffer {
+  const mockPdfContent = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+>>
+endobj
+
+4 0 obj
+<<
+/Length 50
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(MOCK PDF - DEVELOPMENT MODE) Tj
+ET
+endstream
+endobj
+
+xref
+0 5
+0000000000 65535 f 
+0000000010 00000 n 
+0000000053 00000 n 
+0000000110 00000 n 
+0000000190 00000 n 
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+290
+%%EOF`;
+  
+  return Buffer.from(mockPdfContent);
 }
 
 export async function generateKitPDF(kit: Kit, artifacts: KitArtifacts): Promise<Buffer> {
@@ -111,7 +199,7 @@ function generateKitHTML(kit: Kit, artifacts: KitArtifacts): string {
     <!-- SECTION:JOB_POST:END -->
     
     <!-- SECTION:INTERVIEWS:START -->
-    ${generateInterviewGuides(artifacts.interview_stages)}
+    ${generateInterviewGuides(artifacts.interview)}
     <!-- SECTION:INTERVIEWS:END -->
     
     <!-- SECTION:WORK_SAMPLE:START -->
@@ -127,7 +215,7 @@ function generateKitHTML(kit: Kit, artifacts: KitArtifacts): string {
     <!-- SECTION:PROCESS:END -->
     
     <!-- SECTION:EEO:START -->
-    ${generateEEOGuidelines(artifacts.eeo_guidelines)}
+    ${generateEEOGuidelines(artifacts.eeo)}
     <!-- SECTION:EEO:END -->
   </div>
 </body>
@@ -146,13 +234,13 @@ function generateArtifactHTML(kit: Kit, artifacts: KitArtifacts, artifactType: s
       content = generateJobPost(artifacts.job_post);
       break;
     case "interview_stage1":
-      content = generateInterviewGuide(artifacts.interview_stages[0], 1);
+      content = generateInterviewGuide(artifacts.interview?.stage1, 1);
       break;
     case "interview_stage2":
-      content = generateInterviewGuide(artifacts.interview_stages[1], 2);
+      content = generateInterviewGuide(artifacts.interview?.stage2, 2);
       break;
     case "interview_stage3":
-      content = generateInterviewGuide(artifacts.interview_stages[2], 3);
+      content = generateInterviewGuide(artifacts.interview?.stage3, 3);
       break;
     case "work_sample":
       content = generateWorkSample(artifacts.work_sample);
@@ -164,7 +252,7 @@ function generateArtifactHTML(kit: Kit, artifacts: KitArtifacts, artifactType: s
       content = generateProcessMap(artifacts.process_map);
       break;
     case "eeo":
-      content = generateEEOGuidelines(artifacts.eeo_guidelines);
+      content = generateEEOGuidelines(artifacts.eeo);
       break;
     default:
       content = "<p>Unknown artifact type</p>";
@@ -324,9 +412,13 @@ function getKitCSS(): string {
 
 // Template generation functions
 function generateCoverPage(kit: Kit, artifacts: KitArtifacts): string {
+  if (!kit?.intake_json) {
+    return '<div class="page cover-page"><h1>Invalid Kit Data</h1></div>';
+  }
+  
   const intake = kit.intake_json;
-  const organization = intake?.organization || "Organization";
-  const roleTitle = intake?.role_title || "Role";
+  const organization = intake.organization || "Organization";
+  const roleTitle = intake.role_title || "Role";
   
   return `
     <div class="page cover-page">

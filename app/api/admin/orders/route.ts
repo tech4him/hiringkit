@@ -1,12 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/client";
+import { createAdminClient } from "@/lib/supabase/client";
+import { safeRequireAdmin } from "@/lib/auth/helpers";
+import { validateQueryParams, createApiResponse, createNextResponse } from "@/lib/validation/helpers";
+import { AdminOrdersQuerySchema } from "@/lib/validation/schemas";
+import { logAdminAction, logError } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status") || "all";
+    // Require admin authentication
+    const authResult = await safeRequireAdmin(request);
+    if (!authResult.success) {
+      return authResult.response;
+    }
 
-    const supabase = createServerClient();
+    const { user } = authResult;
+    logAdminAction('ADMIN_ORDERS_REQUEST', user.email, { userId: user.id });
+
+    // Validate query parameters
+    const { searchParams } = new URL(request.url);
+    const validationResult = validateQueryParams(searchParams, AdminOrdersQuerySchema);
+    
+    if (!validationResult.success) {
+      return createNextResponse(validationResult.error, 400);
+    }
+
+    const { status, page = 1, limit = 20 } = validationResult.data;
+
+    // Log admin action
+    logAdminAction('FETCH_ORDERS', user.email, {
+      filters: { status, page, limit },
+    });
+
+    // Use admin client to bypass RLS for admin operations
+    const supabase = createAdminClient();
 
     let query = supabase
       .from("orders")
@@ -19,30 +45,62 @@ export async function GET(request: NextRequest) {
           qa_required
         )
       `)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range((page - 1) * limit, page * limit - 1);
 
     // Filter by status if specified
     if (status !== "all") {
       query = query.eq("status", status);
     }
 
-    const { data: orders, error } = await query;
+    const { data: orders, error, count } = await query;
 
     if (error) {
-      console.error("Error fetching orders:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch orders" },
-        { status: 500 }
-      );
+      logError(new Error(error.message), {
+        context: 'admin_orders_fetch',
+        adminId: user.id,
+        filters: { status, page, limit },
+      });
+      
+      return createNextResponse({
+        success: false,
+        error: {
+          code: 'DATABASE_ERROR',
+          message: 'Failed to fetch orders',
+        },
+      }, 500);
     }
 
-    return NextResponse.json({ orders });
+    const response = createApiResponse({
+      orders,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    });
+
+    logAdminAction('ADMIN_ORDERS_FETCHED', user.email, {
+      ordersCount: orders?.length || 0,
+      page,
+      limit,
+    });
+
+    return createNextResponse(response);
 
   } catch (error) {
-    console.error("Admin orders error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch orders" },
-      { status: 500 }
-    );
+    logError(error as Error, {
+      context: 'admin_orders_route',
+      path: request.nextUrl.pathname,
+    });
+    
+    return createNextResponse({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Internal server error',
+      },
+    }, 500);
   }
 }

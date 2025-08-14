@@ -1,8 +1,9 @@
 import OpenAI from "openai";
 import type { IntakeData, KitArtifacts } from "@/types";
+import { env } from "@/lib/config/env";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
+  apiKey: env.OPENAI_API_KEY,
 });
 
 interface GenerateKitOptions extends Partial<IntakeData> {
@@ -153,7 +154,11 @@ async function generateExpressKit(options: GenerateKitOptions): Promise<{ intake
     };
 
   } catch (error) {
-    console.error("AI generation error:", error);
+    console.error('AI Express Generation Error:', error, {
+      context: 'ai_express_generation',
+      roleTitle: options.role_title,
+      organization: options.organization,
+    });
     
     // Fallback with sample data
     return generateFallbackKit(options);
@@ -210,7 +215,11 @@ async function generateDetailedKit(intake: IntakeData): Promise<{ intake: Intake
     };
 
   } catch (error) {
-    console.error("AI generation error:", error);
+    console.error('AI Detailed Generation Error:', error, {
+      context: 'ai_detailed_generation',
+      roleTitle: intake.role_title,
+      organization: intake.organization,
+    });
     return generateFallbackKit({ ...intake, express_mode: false });
   }
 }

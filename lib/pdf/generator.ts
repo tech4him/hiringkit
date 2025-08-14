@@ -1,8 +1,8 @@
 import type { Kit, KitArtifacts } from "@/types";
 import JSZip from "jszip";
-import { generateKitPDF } from "./pdfshift";
-import { smartSplitPDF } from "./splitter";
-import { createServerClient } from "@/lib/supabase/client";
+import { generateKitPDF, generateArtifactPDF } from "./pdfshift";
+import { createAdminClient } from "@/lib/supabase/client";
+import { logError } from "@/lib/logger";
 
 interface ExportResult {
   success: boolean;
@@ -45,7 +45,11 @@ export async function generatePDF(kit: Kit, exportType: "combined_pdf" | "zip"):
     }
 
   } catch (error) {
-    console.error("PDF generation error:", error);
+    logError(error as Error, {
+      context: 'pdf_generation_main',
+      kitId: kit.id,
+      exportType,
+    });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error"
@@ -59,7 +63,7 @@ async function generateCombinedPDF(kit: Kit, artifacts: KitArtifacts): Promise<s
     const pdfBuffer = await generateKitPDF(kit, artifacts);
     
     // Upload to Supabase Storage
-    const supabase = createServerClient();
+    const supabase = createAdminClient();
     const fileName = `kits/${kit.id}/combined_${Date.now()}.pdf`;
     
     const { data, error } = await supabase.storage
@@ -70,7 +74,11 @@ async function generateCombinedPDF(kit: Kit, artifacts: KitArtifacts): Promise<s
       });
 
     if (error) {
-      console.error('Storage upload error:', error);
+      logError(new Error(error.message), {
+        context: 'pdf_storage_upload',
+        kitId: kit.id,
+        fileName,
+      });
       // Fallback to mock URL for testing
       return generateMockPdfUrl(kit.id, "combined");
     }
@@ -82,7 +90,10 @@ async function generateCombinedPDF(kit: Kit, artifacts: KitArtifacts): Promise<s
 
     return publicUrl;
   } catch (error) {
-    console.error('PDF generation error:', error);
+    logError(error as Error, {
+      context: 'pdf_combined_generation',
+      kitId: kit.id,
+    });
     // Fallback to mock URL for testing
     return generateMockPdfUrl(kit.id, "combined");
   }
@@ -91,7 +102,7 @@ async function generateCombinedPDF(kit: Kit, artifacts: KitArtifacts): Promise<s
 async function generateZipExport(kit: Kit, artifacts: KitArtifacts): Promise<{ url: string; assets: Array<{ type: string; url: string }> }> {
   try {
     const zip = new JSZip();
-    const supabase = createServerClient();
+    const supabase = createAdminClient();
     const assets: Array<{ type: string; url: string }> = [];
     
     // Generate individual PDFs for each artifact
@@ -129,7 +140,11 @@ async function generateZipExport(kit: Kit, artifacts: KitArtifacts): Promise<{ u
           assets.push({ type: artifact.type, url: publicUrl });
         }
       } catch (error) {
-        console.error(`Error generating ${artifact.type}:`, error);
+        logError(error as Error, {
+          context: 'artifact_pdf_generation',
+          kitId: kit.id,
+          artifactType: artifact.type,
+        });
         // Add mock PDF for failed generation
         const mockPdf = generateMockPdfContent(kit.id, artifact.type);
         zip.file(artifact.name, mockPdf);
@@ -156,7 +171,11 @@ Each PDF is a separate file for easy sharing and printing.`);
       });
 
     if (zipError) {
-      console.error('ZIP upload error:', zipError);
+      logError(new Error(zipError.message), {
+        context: 'zip_upload_error',
+        kitId: kit.id,
+        zipFileName,
+      });
       // Fallback to mock URL
       return {
         url: generateMockPdfUrl(kit.id, "complete_kit_zip"),
@@ -173,7 +192,10 @@ Each PDF is a separate file for easy sharing and printing.`);
       assets
     };
   } catch (error) {
-    console.error('ZIP generation error:', error);
+    logError(error as Error, {
+      context: 'zip_generation_error',
+      kitId: kit.id,
+    });
     // Fallback to mock URLs
     const mockAssets = [
       { type: "scorecard", url: generateMockPdfUrl(kit.id, "scorecard") },

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/client";
+import { createAdminClient } from "@/lib/supabase/client";
 import { generatePDF } from "@/lib/pdf/generator-optimized";
 import { generateExportForVercel } from "@/lib/pdf/vercel-optimized";
 
@@ -18,7 +18,7 @@ export async function POST(
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = createAdminClient();
 
     // Get kit and check if user has paid
     const { data: kit, error: kitError } = await supabase
