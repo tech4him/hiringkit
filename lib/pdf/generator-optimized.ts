@@ -133,8 +133,7 @@ async function generateCombinedPDF(kit: Kit, artifacts: KitArtifacts): Promise<s
 
     if (error) {
       console.error('Storage upload error:', error);
-      // Fallback to mock URL for testing
-      return generateMockPdfUrl(kit.id, "combined");
+      throw new Error(`Failed to upload PDF to storage: ${error.message}`);
     }
 
     // Get public URL
@@ -146,8 +145,7 @@ async function generateCombinedPDF(kit: Kit, artifacts: KitArtifacts): Promise<s
     return publicUrl;
   } catch (error) {
     console.error('PDF generation error:', error);
-    // Fallback to mock URL for testing
-    return generateMockPdfUrl(kit.id, "combined");
+    throw error;
   }
 }
 
@@ -216,9 +214,7 @@ async function generateZipExportOptimized(kit: Kit, artifacts: KitArtifacts): Pr
         }
       } catch (error) {
         console.error(`Error processing ${type}:`, error);
-        // Add mock PDF for failed sections
-        const mockPdf = generateMockPdfContent(kit.id, type);
-        zip.append(mockPdf, { name: fileName });
+        throw new Error(`Failed to process ${type} PDF: ${error}`);
       }
     }
 
@@ -259,11 +255,7 @@ Documents included:
 
     if (zipError) {
       console.error('ZIP upload error:', zipError);
-      // Fallback to mock URL
-      return {
-        url: generateMockPdfUrl(kit.id, "complete_kit_zip"),
-        assets
-      };
+      throw new Error(`Failed to upload ZIP to storage: ${zipError.message}`);
     }
 
     const { data: { publicUrl: zipUrl } } = supabase.storage
@@ -277,26 +269,7 @@ Documents included:
     };
   } catch (error) {
     console.error('Optimized ZIP generation error:', error);
-    console.log('Falling back to mock PDFs...');
-    
-    // Fallback to mock URLs
-    const mockAssets = [
-      { type: "cover", url: generateMockPdfUrl(kit.id, "cover") },
-      { type: "scorecard", url: generateMockPdfUrl(kit.id, "scorecard") },
-      { type: "job_post", url: generateMockPdfUrl(kit.id, "job_post") },
-      { type: "interview_stage1", url: generateMockPdfUrl(kit.id, "interview_stage1") },
-      { type: "interview_stage2", url: generateMockPdfUrl(kit.id, "interview_stage2") },
-      { type: "interview_stage3", url: generateMockPdfUrl(kit.id, "interview_stage3") },
-      { type: "work_sample", url: generateMockPdfUrl(kit.id, "work_sample") },
-      { type: "reference_check", url: generateMockPdfUrl(kit.id, "reference_check") },
-      { type: "process_map", url: generateMockPdfUrl(kit.id, "process_map") },
-      { type: "eeo", url: generateMockPdfUrl(kit.id, "eeo") }
-    ];
-    
-    return {
-      url: generateMockPdfUrl(kit.id, "complete_kit_zip"),
-      assets: mockAssets
-    };
+    throw error;
   }
 }
 

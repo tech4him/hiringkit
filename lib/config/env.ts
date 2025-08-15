@@ -20,6 +20,7 @@ const envSchema = z.object({
 
   // PDFShift
   PDFSHIFT_API_KEY: z.string().min(1, 'PDFSHIFT_API_KEY is required'),
+  ENABLE_REAL_PDF_GENERATION: z.string().optional(),
 
   // App
   NEXT_PUBLIC_APP_URL: z.string().url('NEXT_PUBLIC_APP_URL must be a valid URL'),
@@ -78,4 +79,9 @@ export function isProduction(): boolean {
 // Helper to determine if we're in development
 export function isDevelopment(): boolean {
   return env.NODE_ENV === 'development';
+}
+
+// Helper to determine if real PDF generation should be used
+export function shouldUseRealPDFGeneration(): boolean {
+  return isProduction() || env.ENABLE_REAL_PDF_GENERATION === 'true';
 }

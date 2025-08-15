@@ -1,5 +1,5 @@
 import { Kit, KitArtifacts, Scorecard, JobPost, InterviewStages, InterviewStage, InterviewQuestion, RubricRow, WorkSample, ScoringCriteria, ReferenceCheck, ProcessMap, ProcessStep, EEOGuidelines } from "@/types";
-import { env, isDevelopment } from "@/lib/config/env";
+import { env, shouldUseRealPDFGeneration } from "@/lib/config/env";
 import { logError, logPerformance } from "@/lib/logger";
 
 interface PDFShiftOptions {
@@ -20,11 +20,12 @@ interface PDFShiftOptions {
 export async function generatePDFWithPDFShift(html: string, options: Partial<PDFShiftOptions> = {}): Promise<Buffer> {
   const startTime = Date.now();
   
-  // In development, return mock PDF
-  if (isDevelopment()) {
+  // Use mock PDF only if real PDF generation is disabled
+  if (!shouldUseRealPDFGeneration()) {
     logPerformance('PDF_GENERATION_MOCK', Date.now() - startTime, {
-      mode: 'development',
+      mode: 'development_mock',
       htmlLength: html.length,
+      reason: 'ENABLE_REAL_PDF_GENERATION not set to true',
     });
     
     return generateMockPDF();
