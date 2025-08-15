@@ -91,20 +91,20 @@ export const IntakeDataSchema = z.object({
 export const GenerateKitRequestSchema = z.object({
   express_mode: z.boolean().optional().default(false),
   role_title: nonEmptyString.min(2).max(100),
-  organization: nonEmptyString.min(2).max(100).optional(),
-  mission: nonEmptyString.min(10).max(1000).optional(),
+  organization: z.string().max(100).optional(),
+  mission: z.string().max(1000).optional(),
   // For detailed mode, require full intake data
 }).superRefine((data, ctx) => {
   if (!data.express_mode) {
     // In detailed mode, require additional fields
-    if (!data.organization) {
+    if (!data.organization || data.organization.trim().length < 2) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Organization is required for detailed mode",
         path: ['organization'],
       });
     }
-    if (!data.mission) {
+    if (!data.mission || data.mission.trim().length < 10) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Mission is required for detailed mode",
@@ -127,6 +127,7 @@ export const AdminOrdersQuerySchema = z.object({
   status: OrderStatusSchema.or(z.literal('all')).default('all'),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  org_id: z.string().uuid().optional(),
 });
 
 // Kit export request

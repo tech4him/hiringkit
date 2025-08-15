@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const Stripe = (await import("stripe")).default;
     const { createAdminClient } = await import("@/lib/supabase/client");
     const { headers } = await import("next/headers");
-    const { logWebhook, logError } = await import("@/lib/logger");
+    // Removed logger import to prevent worker_threads error
     const { env } = await import("@/lib/config/env");
     const { sendOrderConfirmationEmail } = await import("@/lib/email/resend");
 
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     } catch (err) {
-      logError(err as Error, {
+      console.error('webhook_signature_verification error:', err, {
         context: 'webhook_signature_verification',
         hasSignature: !!signature,
       });
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
-      logError(new Error(checkError.message), {
+      console.error(new Error(checkError.message), {
         context: 'webhook_idempotency_check',
         eventId: event.id,
         eventType: event.type,
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     if (existingEvent) {
       if (existingEvent.processing_status === 'completed') {
-        logWebhook(event.type, event.id, {
+        console.log(event.type, event.id, {
           status: 'already_processed',
           message: 'Event already processed successfully',
         });
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       }
       
       if (existingEvent.processing_status === 'processing') {
-        logWebhook(event.type, event.id, {
+        console.log(event.type, event.id, {
           status: 'currently_processing',
           message: 'Event is currently being processed',
         });
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       });
 
     if (insertError) {
-      logError(new Error(insertError.message), {
+      console.error(new Error(insertError.message), {
         context: 'webhook_event_recording',
         eventId: event.id,
         eventType: event.type,
@@ -141,14 +141,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logWebhook(event.type, event.id, {
+    console.log(event.type, event.id, {
       status: 'processing_started',
       livemode: event.livemode,
     });
 
     try {
       // Process the webhook event
-      await processWebhookEvent(event, supabase, env, logWebhook, logError, sendOrderConfirmationEmail);
+      await processWebhookEvent(event, supabase, env, sendOrderConfirmationEmail);
 
       // Mark event as completed
       await supabase
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
         })
         .eq("event_id", event.id);
 
-      logWebhook(event.type, event.id, {
+      console.log(event.type, event.id, {
         status: 'completed',
         message: 'Event processed successfully',
       });
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
         })
         .eq("event_id", event.id);
 
-      logError(processingError as Error, {
+      console.error(processingError as Error, {
         context: 'webhook_event_processing',
         eventId: event.id,
         eventType: event.type,
@@ -204,8 +204,6 @@ async function processWebhookEvent(
   event: unknown, 
   supabase: unknown, 
   env: unknown, 
-  logWebhook: unknown, 
-  logError: unknown, 
   sendOrderConfirmationEmail: unknown
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -214,10 +212,6 @@ async function processWebhookEvent(
   const typedSupabase = supabase as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedEnv = env as any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedLogWebhook = logWebhook as any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedLogError = logError as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedSendOrderConfirmationEmail = sendOrderConfirmationEmail as any;
   switch (typedEvent.type) {
@@ -284,7 +278,7 @@ async function processWebhookEvent(
             });
 
             if (!emailResult.success) {
-              typedLogError(new Error(`Failed to send confirmation email: ${emailResult.error}`), {
+              console.error('email_confirmation_failed error:', new Error(`Failed to send confirmation email: ${emailResult.error}`), {
                 context: 'email_confirmation_failed',
                 orderNumber: order.id,
                 customerEmail: session.customer_details.email,
@@ -292,13 +286,13 @@ async function processWebhookEvent(
             }
           }
         } catch (emailError) {
-          typedLogError(emailError as Error, {
+          console.error('email_confirmation_error:', emailError as Error, {
             context: 'email_confirmation_error',
             sessionId: session.id,
           });
         }
 
-        typedLogWebhook('payment_processed', typedEvent.id, {
+        console.log('payment_processed', typedEvent.id, {
           sessionId: session.id,
           planType: session.metadata?.plan_type,
           kitId: session.metadata?.kit_id,
@@ -344,7 +338,7 @@ async function processWebhookEvent(
     }
 
     default:
-      typedLogWebhook('unhandled_event', typedEvent.id, {
+      console.log('unhandled_event', typedEvent.id, {
         eventType: typedEvent.type,
         message: `Unhandled event type: ${typedEvent.type}`,
       });

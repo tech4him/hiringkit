@@ -68,17 +68,22 @@ function KitPageContent() {
       });
 
       if (!response.ok) {
+        const errorData = await response.json();
+        if (errorData.error?.details && response.status === 400) {
+          const messages = errorData.error.details.map((d: { message: string }) => d.message).join(", ");
+          throw new Error(`Please provide: ${messages}`);
+        }
         throw new Error("Failed to generate kit");
       }
 
       const result = await response.json();
-      setKit(result.kit);
-      setArtifacts(result.artifacts);
-      setIntakeData(result.intake); // Update with AI-filled data
+      setKit(result.data.kit);
+      setArtifacts(result.data.artifacts);
+      setIntakeData(result.data.intake); // Update with AI-filled data
       setHasGenerated(true);
     } catch (error) {
       console.error("Generation error:", error);
-      alert("Failed to generate kit. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to generate kit. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -97,16 +102,21 @@ function KitPageContent() {
       });
 
       if (!response.ok) {
+        const errorData = await response.json();
+        if (errorData.error?.details && response.status === 400) {
+          const messages = errorData.error.details.map((d: { message: string }) => d.message).join(", ");
+          throw new Error(`Please provide: ${messages}`);
+        }
         throw new Error("Failed to generate kit");
       }
 
       const result = await response.json();
-      setKit(result.kit);
-      setArtifacts(result.artifacts);
+      setKit(result.data.kit);
+      setArtifacts(result.data.artifacts);
       setHasGenerated(true);
     } catch (error) {
       console.error("Generation error:", error);
-      alert("Failed to generate kit. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to generate kit. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -132,7 +142,14 @@ function KitPageContent() {
             <div className="flex items-center gap-3">
               {hasGenerated && (
                 <button
-                  onClick={() => router.push(`/kit/${kit?.id}/checkout`)}
+                  onClick={() => {
+                    if (!kit?.id) {
+                      console.error('No kit ID available for checkout');
+                      alert('Please generate a kit first before proceeding to checkout.');
+                      return;
+                    }
+                    router.push(`/kit/${kit.id}/checkout`);
+                  }}
                   className="bg-[#1F4B99] text-white px-4 py-2 rounded-lg hover:brightness-110 text-sm font-medium"
                 >
                   Unlock Full Kit - $49
@@ -164,7 +181,14 @@ function KitPageContent() {
               artifacts={artifacts}
               isGenerating={isGenerating}
               hasGenerated={hasGenerated}
-              onUnlock={() => router.push(`/kit/${kit?.id}/checkout`)}
+              onUnlock={() => {
+                if (!kit?.id) {
+                  console.error('No kit ID available for checkout');
+                  alert('Please generate a kit first before proceeding to checkout.');
+                  return;
+                }
+                router.push(`/kit/${kit.id}/checkout`);
+              }}
             />
           </div>
         </div>

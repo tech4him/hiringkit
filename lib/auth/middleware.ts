@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 import { env, isAdminEmail } from '@/lib/config/env';
-import { logSecurity, logUserAction } from '@/lib/logger';
+// Removed logger import to prevent worker_threads issues
 import type { User, Organization } from '@/types';
 
 // Create authenticated Supabase client using cookies
@@ -134,7 +134,7 @@ export async function requireAuthentication(request: NextRequest) {
   const user = await getCurrentUser();
   
   if (!user) {
-    logSecurity('UNAUTHORIZED_ACCESS', {
+    console.error('UNAUTHORIZED_ACCESS:', {
       path: request.nextUrl.pathname,
       method: request.method,
       userAgent: request.headers.get('user-agent'),
@@ -144,7 +144,8 @@ export async function requireAuthentication(request: NextRequest) {
     throw new Error('Authentication required');
   }
 
-  logUserAction('AUTHENTICATED_REQUEST', user.id, {
+  console.log('AUTHENTICATED_REQUEST:', {
+    userId: user.id,
     path: request.nextUrl.pathname,
     method: request.method,
     userEmail: user.email,
@@ -160,7 +161,7 @@ export async function requireAdminAccess(request: NextRequest) {
   const isAdmin = user.role === 'admin' || isAdminEmail(user.email);
   
   if (!isAdmin) {
-    logSecurity('ADMIN_ACCESS_DENIED', {
+    console.error('ADMIN_ACCESS_DENIED:', {
       userId: user.id,
       userEmail: user.email,
       path: request.nextUrl.pathname,
@@ -170,7 +171,8 @@ export async function requireAdminAccess(request: NextRequest) {
     throw new Error('Admin access required');
   }
 
-  logUserAction('ADMIN_ACCESS', user.id, {
+  console.log('ADMIN_ACCESS:', {
+    userId: user.id,
     path: request.nextUrl.pathname,
     method: request.method,
     userEmail: user.email,
@@ -190,7 +192,7 @@ export async function requireOrganizationAccess(request: NextRequest, orgId: str
 
   // Check if user belongs to the organization
   if (user.org_id !== orgId) {
-    logSecurity('ORG_ACCESS_DENIED', {
+    console.error('ORG_ACCESS_DENIED:', {
       userId: user.id,
       userEmail: user.email,
       userOrgId: user.org_id,
@@ -219,7 +221,7 @@ export async function requireResourceOwnership(
 
   // Check if user owns the resource
   if (user.id !== resourceUserId) {
-    logSecurity('RESOURCE_ACCESS_DENIED', {
+    console.error('RESOURCE_ACCESS_DENIED:', {
       userId: user.id,
       userEmail: user.email,
       resourceUserId,

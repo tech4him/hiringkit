@@ -10,7 +10,6 @@ import {
   unauthorizedResponse, 
   forbiddenResponse, 
 } from '@/lib/validation/helpers';
-import { logError } from '@/lib/logger';
 import type { User } from '@/types';
 
 // Result type for auth operations
@@ -27,7 +26,7 @@ export async function safeGetCurrentUser(): Promise<User | null> {
   try {
     return await getCurrentUser();
   } catch (error) {
-    logError(error as Error, { context: 'safeGetCurrentUser' });
+    console.error('safeGetCurrentUser error:', error);
     return null;
   }
 }
@@ -184,7 +183,7 @@ export async function checkResourceOwnership(
 
     return data.user_id === userId;
   } catch (error) {
-    logError(error as Error, { 
+    console.error('checkResourceOwnership error:', error, { 
       context: 'checkResourceOwnership',
       resourceType,
       resourceId,
@@ -212,7 +211,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
     return data as User;
   } catch (error) {
-    logError(error as Error, { context: 'getUserByEmail', email });
+    console.error('getUserByEmail error:', error, { context: 'getUserByEmail', email });
     return null;
   }
 }
@@ -246,7 +245,7 @@ export async function upsertUserFromAuth(authUser: SupabaseAuthUser): Promise<Us
       .single();
 
     if (error) {
-      logError(new Error(error.message), { 
+      console.error('upsertUserFromAuth error:', error.message, { 
         context: 'upsertUserFromAuth',
         authUserId: authUser.id,
       });
@@ -255,7 +254,7 @@ export async function upsertUserFromAuth(authUser: SupabaseAuthUser): Promise<Us
 
     return data as User;
   } catch (error) {
-    logError(error as Error, { 
+    console.error('upsertUserFromAuth error:', error, { 
       context: 'upsertUserFromAuth',
       authUserId: authUser.id,
     });

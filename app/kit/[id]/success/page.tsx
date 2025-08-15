@@ -42,9 +42,73 @@ export default function SuccessPage() {
     }
   }, [kitId]);
 
+  // Add comprehensive logging to track navigation issues
+  console.log('SuccessPage loaded:', {
+    kitId,
+    params,
+    url: typeof window !== 'undefined' ? window.location.href : 'server',
+    timestamp: new Date().toISOString()
+  });
+
   useEffect(() => {
     checkOrderStatus();
   }, [checkOrderStatus]);
+
+  // Add logging to track any navigation attempts
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const originalPushState = window.history.pushState;
+      const originalReplaceState = window.history.replaceState;
+      
+      window.history.pushState = function(...args) {
+        console.log('History pushState called:', args);
+        return originalPushState.apply(this, args);
+      };
+      
+      window.history.replaceState = function(...args) {
+        console.log('History replaceState called:', args);
+        return originalReplaceState.apply(this, args);
+      };
+      
+      return () => {
+        window.history.pushState = originalPushState;
+        window.history.replaceState = originalReplaceState;
+      };
+    }
+  }, []);
+
+  // Validate kitId after hooks declaration
+  if (!kitId || kitId === 'undefined') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h1 className="text-lg font-semibold text-red-900 mb-2">
+              Invalid Kit ID
+            </h1>
+            <p className="text-red-700 mb-4">
+              The kit ID is missing or invalid. Please check your order confirmation email for the correct link.
+            </p>
+            <div className="space-y-2">
+              <Button
+                onClick={() => window.location.href = "/kit"}
+                className="w-full"
+              >
+                Create New Kit
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => window.location.href = "/"}
+                className="w-full"
+              >
+                Go Home
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleDownload = async (exportType: "combined_pdf" | "zip") => {
     setIsExporting(true);

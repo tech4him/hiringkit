@@ -46,7 +46,6 @@ export async function POST(request: NextRequest) {
     // Dynamic imports for server-only functionality
     const Stripe = (await import("stripe")).default;
     const { createAdminClient } = await import("@/lib/supabase/client");
-    const { logError, logUserAction } = await import("@/lib/logger");
     const { safeGetCurrentUser, getOrganizationId } = await import("@/lib/auth/helpers");
     const { env } = await import("@/lib/config/env");
 
@@ -54,9 +53,11 @@ export async function POST(request: NextRequest) {
       apiVersion: "2025-02-24.acacia"
     });
 
-    logUserAction('CHECKOUT_SESSION_REQUEST', undefined, {
+    console.log('CHECKOUT_SESSION_REQUEST:', {
       kitId: kit_id,
       planType: plan_type,
+      successUrl: success_url,
+      cancelUrl: cancel_url,
     });
 
     // Get current user (optional for guest checkout)
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     const { data: kit, error: kitError } = await kitQuery.single();
 
     if (kitError || !kit) {
-      logError(new Error('Kit not found or access denied'), {
+      console.error('Kit not found or access denied:', {
         context: 'checkout_kit_access',
         kitId: kit_id,
         userId: currentUser?.id,
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (orgError) {
-        logError(new Error(orgError.message), {
+        console.error('guest_org_creation error:', orgError.message, {
           context: 'guest_org_creation',
           kitId: kit_id,
         });
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
       }
       
       finalOrgId = guestOrg.id; // ✅ Use the created guest org ID
-      logUserAction('GUEST_ORG_CREATED', undefined, {
+      console.log('GUEST_ORG_CREATED:', {
         kitId: kit_id,
         guestOrgId: guestOrg.id,
         guestOrgName: guestOrg.name,
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     // Validate that we have a required org_id
     if (!finalOrgId) {
-      logError(new Error('No organization ID available for checkout'), {
+      console.error('No organization ID available for checkout:', {
         context: 'checkout_org_validation',
         kitId: kit_id,
         userId: currentUser?.id,
@@ -168,32 +169,18 @@ export async function POST(request: NextRequest) {
       }, 400);
     }
 
-    // Fix: Ensure user_id is never null
-    const finalUserId = kit.user_id || currentUser?.id;
-    if (!finalUserId) {
-      logError(new Error('No user ID available for checkout'), {
-        context: 'checkout_user_validation',
-        kitId: kit_id,
-        kitUserId: kit.user_id,
-        currentUserId: currentUser?.id,
-      });
-      return createNextResponse({
-        success: false,
-        error: {
-          code: 'USER_REQUIRED_ERROR',
-          message: 'User identification required for checkout',
-        },
-      }, 400);
-    }
+    // For guest checkout: user_id can be null, but we need it for orders table
+    // Use kit's user_id if available, otherwise current user, otherwise null (guest)
+    const finalUserId = kit.user_id || currentUser?.id || null;
 
     // Validate required fields before proceeding to Stripe
     const validationErrors = [];
     if (!kit_id) validationErrors.push('Kit ID required');
-    if (!finalOrgId) validationErrors.push('Organization required');  
-    if (!finalUserId) validationErrors.push('User identification required');
+    if (!finalOrgId) validationErrors.push('Organization required');
+    // Note: finalUserId can be null for guest checkouts
 
     if (validationErrors.length > 0) {
-      logError(new Error('Checkout validation failed'), {
+      console.error('Checkout validation failed:', {
         context: 'checkout_validation',
         errors: validationErrors,
         kitId: kit_id,
@@ -209,7 +196,8 @@ export async function POST(request: NextRequest) {
       }, 400);
     }
 
-    logUserAction('CHECKOUT_VALIDATION_PASSED', currentUser?.id, {
+    console.log('CHECKOUT_VALIDATION_PASSED:', {
+      userId: currentUser?.id,
       kitId: kit_id,
       finalOrgId,
       finalUserId,
@@ -225,8 +213,8 @@ export async function POST(request: NextRequest) {
       metadata: {
         kit_id,
         plan_type: plan_type as string,
-        user_id: finalUserId, // ✅ Use validated user ID
-        org_id: finalOrgId,   // ✅ Add org ID to metadata for webhooks
+        user_id: finalUserId || '', // ✅ Use user ID or empty string for guest
+        org_id: finalOrgId,         // ✅ Add org ID to metadata for webhooks
       },
       line_items: [
         {
@@ -258,7 +246,7 @@ export async function POST(request: NextRequest) {
       .from("orders")
       .insert({
         org_id: finalOrgId,    // ✅ Always valid - validated above
-        user_id: finalUserId,  // ✅ Always valid - validated above
+        user_id: finalUserId,  // ✅ Can be null for guest checkouts
         kit_id: kit_id,
         status: "awaiting_payment",
         stripe_session_id: session.id,
@@ -266,7 +254,7 @@ export async function POST(request: NextRequest) {
       });
 
     if (orderError) {
-      logError(new Error(orderError.message), {
+      console.error('checkout_order_creation error:', orderError.message, {
         context: 'checkout_order_creation',
         kitId: kit_id,
         userId: currentUser?.id,
@@ -283,7 +271,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (currentUser) {
-      logUserAction('CHECKOUT_INITIATED', currentUser.id, {
+      console.log('CHECKOUT_INITIATED:', {
+        userId: currentUser.id,
         kitId: kit_id,
         planType: plan_type,
         amount: selectedPlan.amount,
@@ -291,7 +280,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    logUserAction('CHECKOUT_SESSION_CREATED', currentUser?.id, {
+    console.log('CHECKOUT_SESSION_CREATED:', {
+      userId: currentUser?.id,
       kitId: kit_id,
       sessionId: session.id,
       planType: plan_type,

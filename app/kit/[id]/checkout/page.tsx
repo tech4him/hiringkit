@@ -31,13 +31,15 @@ export default function CheckoutPage() {
   const [kit, setKit] = useState<Kit | null>(null);
 
   useEffect(() => {
-    // Load kit details for display
-    // For now, we'll use placeholder data
-    setKit({
-      id: kitId,
-      title: "Marketing Manager Hiring Kit",
-      role_title: "Marketing Manager"
-    });
+    // Load kit details for display only if we have a valid kitId
+    if (kitId && kitId !== 'undefined') {
+      // For now, we'll use placeholder data
+      setKit({
+        id: kitId,
+        title: "Marketing Manager Hiring Kit",
+        role_title: "Marketing Manager"
+      });
+    }
   }, [kitId]);
 
   const handleCheckout = async () => {
@@ -59,9 +61,18 @@ export default function CheckoutPage() {
         throw new Error("Failed to create checkout session");
       }
 
-      const { url } = await response.json();
+      const responseData = await response.json();
+      const { url } = responseData.data || responseData;
+      
+      console.log('Checkout response:', { responseData, url });
+      
+      if (!url) {
+        console.error('No URL in checkout response:', responseData);
+        throw new Error('No checkout URL received from server');
+      }
       
       // Redirect to Stripe Checkout
+      console.log('Redirecting to Stripe:', url);
       window.location.href = url;
 
     } catch (error) {
@@ -71,6 +82,30 @@ export default function CheckoutPage() {
       setIsLoading(false);
     }
   };
+
+  // Validate kitId after hooks declaration
+  if (!kitId || kitId === 'undefined') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h1 className="text-lg font-semibold text-red-900 mb-2">
+              Invalid Kit ID
+            </h1>
+            <p className="text-red-700 mb-4">
+              The kit ID is missing or invalid. Please start over with a new kit.
+            </p>
+            <Button
+              onClick={() => router.push("/kit")}
+              className="w-full"
+            >
+              Create New Kit
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!kit) {
     return (
