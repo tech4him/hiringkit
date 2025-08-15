@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 import { env, isAdminEmail } from '@/lib/config/env';
-// Removed logger import to prevent worker_threads issues
+import { withContext, logError, logSecurity, safeError } from '@/lib/logger';
 import type { User, Organization } from '@/types';
 
 // Create authenticated Supabase client using cookies
@@ -22,7 +22,8 @@ export async function createAuthenticatedClient() {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
             // Handle cookie setting errors (e.g., during server-side rendering)
-            console.warn('Failed to set cookie:', name, error);
+            const log = withContext({ context: 'cookie_management' });
+            log.warn('Failed to set cookie', { cookieName: name, error: safeError(error) });
           }
         },
         remove(name: string, options: CookieOptions) {
@@ -30,7 +31,8 @@ export async function createAuthenticatedClient() {
             cookieStore.set({ name, value: '', ...options });
           } catch (error) {
             // Handle cookie removal errors
-            console.warn('Failed to remove cookie:', name, error);
+            const log = withContext({ context: 'cookie_management' });
+            log.warn('Failed to remove cookie', { cookieName: name, error: safeError(error) });
           }
         },
       },
@@ -71,7 +73,7 @@ export async function getCurrentUser(): Promise<User | null> {
         .single();
 
       if (createError) {
-        console.error('Failed to create user record:', createError);
+        logError(new Error('Failed to create user record'), { error: safeError(createError), userId: user.id });
         return null;
       }
 
@@ -80,7 +82,7 @@ export async function getCurrentUser(): Promise<User | null> {
 
     return userRecord as User;
   } catch (error) {
-    console.error('Error getting current user:', error);
+    logError(error as Error, { context: 'getCurrentUser' });
     return null;
   }
 }
@@ -124,7 +126,7 @@ export async function getUserOrganization(userId: string): Promise<Organization 
 
     return organization;
   } catch (error) {
-    console.error('Error getting user organization:', error);
+    logError(error as Error, { context: 'getUserOrganization', userId });
     return null;
   }
 }
@@ -134,7 +136,7 @@ export async function requireAuthentication(request: NextRequest) {
   const user = await getCurrentUser();
   
   if (!user) {
-    console.error('UNAUTHORIZED_ACCESS:', {
+    logSecurity('UNAUTHORIZED_ACCESS', {
       path: request.nextUrl.pathname,
       method: request.method,
       userAgent: request.headers.get('user-agent'),
@@ -144,7 +146,8 @@ export async function requireAuthentication(request: NextRequest) {
     throw new Error('Authentication required');
   }
 
-  console.log('AUTHENTICATED_REQUEST:', {
+  const log = withContext({ userId: user.id, route: request.nextUrl.pathname });
+  log.info('AUTHENTICATED_REQUEST', {
     userId: user.id,
     path: request.nextUrl.pathname,
     method: request.method,
@@ -161,7 +164,7 @@ export async function requireAdminAccess(request: NextRequest) {
   const isAdmin = user.role === 'admin' || isAdminEmail(user.email);
   
   if (!isAdmin) {
-    console.error('ADMIN_ACCESS_DENIED:', {
+    logSecurity('ADMIN_ACCESS_DENIED', {
       userId: user.id,
       userEmail: user.email,
       path: request.nextUrl.pathname,
@@ -171,7 +174,8 @@ export async function requireAdminAccess(request: NextRequest) {
     throw new Error('Admin access required');
   }
 
-  console.log('ADMIN_ACCESS:', {
+  const log = withContext({ userId: user.id, route: request.nextUrl.pathname });
+  log.info('ADMIN_ACCESS', {
     userId: user.id,
     path: request.nextUrl.pathname,
     method: request.method,
@@ -192,7 +196,7 @@ export async function requireOrganizationAccess(request: NextRequest, orgId: str
 
   // Check if user belongs to the organization
   if (user.org_id !== orgId) {
-    console.error('ORG_ACCESS_DENIED:', {
+    logSecurity('ORG_ACCESS_DENIED', {
       userId: user.id,
       userEmail: user.email,
       userOrgId: user.org_id,
@@ -221,7 +225,7 @@ export async function requireResourceOwnership(
 
   // Check if user owns the resource
   if (user.id !== resourceUserId) {
-    console.error('RESOURCE_ACCESS_DENIED:', {
+    logSecurity('RESOURCE_ACCESS_DENIED', {
       userId: user.id,
       userEmail: user.email,
       resourceUserId,

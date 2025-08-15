@@ -1,119 +1,147 @@
-import pino, { type Logger } from 'pino';
-import { isDevelopment } from '@/lib/config/env';
+import winston from 'winston';
 
-// Create the logger instance
-const logger = pino({
-  level: isDevelopment() ? 'debug' : 'info',
-  
-  // Use pretty printing in development
-  ...(isDevelopment() && {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-      },
-    },
-  }),
+export type LogContext = Record<string, unknown> & {
+  reqId?: string;
+  userId?: string;
+  route?: string;
+};
 
-  // Production configuration
-  ...(!isDevelopment() && {
-    formatters: {
-      level: (label) => {
-        return { level: label };
-      },
-    },
-    timestamp: pino.stdTimeFunctions.isoTime,
-  }),
+// Safe error serialization - prevents stack trace leaks in production
+export function safeError(err: unknown) {
+  if (!err || typeof err !== 'object') return { message: String(err) };
+  const e = err as Error;
+  return {
+    name: e.name,
+    message: e.message,
+    stack: process.env.NODE_ENV === 'production' ? undefined : e.stack,
+  };
+}
 
-  // Base fields for all logs
-  base: {
-    env: process.env.NODE_ENV,
-    service: 'hiringkit-api',
-  },
+// Redaction for sensitive data
+function redact(obj: unknown): Record<string, unknown> {
+  const SENSITIVE = ['authorization', 'password', 'token', 'apiKey', 'secret'];
+  if (!obj || typeof obj !== 'object') return {};
+  if (Array.isArray(obj)) {
+    return obj.map(item => redact(item)) as unknown as Record<string, unknown>;
+  }
+  const copy: Record<string, unknown> = { ...obj as Record<string, unknown> };
+  for (const k of Object.keys(copy)) {
+    const v = copy[k];
+    if (SENSITIVE.includes(k.toLowerCase())) {
+      copy[k] = '[REDACTED]';
+    } else if (v && typeof v === 'object') {
+      copy[k] = redact(v);
+    }
+  }
+  return copy;
+}
+
+// Winston format configuration
+const baseFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.printf(({ level, message, timestamp, ...meta }) => {
+    const entry = {
+      ts: timestamp,
+      level,
+      msg: typeof message === 'string' ? message : JSON.stringify(message),
+      env: process.env.NODE_ENV,
+      service: 'hiringkit-api',
+      ...meta,
+    };
+    return JSON.stringify(redact(entry));
+  })
+);
+
+// Main logger instance
+export const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
+  format: baseFormat,
+  transports: [new winston.transports.Console()],
 });
 
-// Helper to create child logger with context
-export function createLogger(context: Record<string, unknown>): Logger {
+// Context helper for request-scoped logging
+export function withContext(ctx: LogContext) {
+  return {
+    error: (msg: string, meta?: Record<string, unknown>) => logger.error(msg, { ...ctx, ...(meta ? redact(meta) : {}) }),
+    warn:  (msg: string, meta?: Record<string, unknown>) => logger.warn(msg,  { ...ctx, ...(meta ? redact(meta) : {}) }),
+    info:  (msg: string, meta?: Record<string, unknown>) => logger.info(msg,  { ...ctx, ...(meta ? redact(meta) : {}) }),
+    debug: (msg: string, meta?: Record<string, unknown>) => logger.debug(msg, { ...ctx, ...(meta ? redact(meta) : {}) }),
+    http:  (msg: string, meta?: Record<string, unknown>) => logger.http ? logger.http(msg, { ...ctx, ...(meta ? redact(meta) : {}) }) : logger.info(msg, { ...ctx, ...(meta ? redact(meta) : {}) }),
+  };
+}
+
+// PRESERVE EXISTING HELPER FUNCTIONS for backward compatibility
+
+export function createLogger(context: Record<string, unknown>) {
   return logger.child(context);
 }
 
-// Helper to log API requests
-export function logRequest(req: Request, context?: Record<string, unknown>): Logger {
+export function logRequest(req: Request, context?: Record<string, unknown>) {
   const url = new URL(req.url);
-  return createLogger({
+  const requestContext = {
     method: req.method,
     path: url.pathname,
     query: Object.fromEntries(url.searchParams),
     userAgent: req.headers.get('user-agent'),
     ...context,
+  };
+  logger.info('API request', redact(requestContext));
+  return logger.child(requestContext);
+}
+
+export function logError(error: Error, context?: Record<string, unknown>) {
+  logger.error('Error occurred', {
+    error: safeError(error),
+    ...redact(context || {}),
   });
 }
 
-// Helper to log errors with stack traces
-export function logError(error: Error, context?: Record<string, unknown>) {
-  logger.error({
-    error: {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    },
-    ...context,
-  }, 'Error occurred');
-}
-
-// Helper to log security events
 export function logSecurity(event: string, context?: Record<string, unknown>) {
-  logger.warn({
+  logger.warn(`Security event: ${event}`, {
     securityEvent: event,
-    ...context,
-  }, `Security event: ${event}`);
+    ...redact(context || {}),
+  });
 }
 
-// Helper to log performance metrics
 export function logPerformance(operation: string, duration: number, context?: Record<string, unknown>) {
-  logger.info({
+  logger.info(`Performance: ${operation} took ${duration}ms`, {
     performance: {
       operation,
       duration,
       unit: 'ms',
     },
-    ...context,
-  }, `Performance: ${operation} took ${duration}ms`);
+    ...redact(context || {}),
+  });
 }
 
-// Helper to log webhook events
 export function logWebhook(event: string, eventId: string, context?: Record<string, unknown>) {
-  logger.info({
+  logger.info(`Webhook: ${event}`, {
     webhook: {
       event,
       eventId,
     },
-    ...context,
-  }, `Webhook: ${event}`);
+    ...redact(context || {}),
+  });
 }
 
-// Helper to log user actions
 export function logUserAction(action: string, userId?: string, context?: Record<string, unknown>) {
-  logger.info({
+  logger.info(`User action: ${action}`, {
     userAction: {
       action,
       userId,
     },
-    ...context,
-  }, `User action: ${action}`);
+    ...redact(context || {}),
+  });
 }
 
-// Helper to log admin actions
 export function logAdminAction(action: string, adminEmail: string, context?: Record<string, unknown>) {
-  logger.warn({
+  logger.warn(`Admin action: ${action}`, {
     adminAction: {
       action,
       adminEmail,
     },
-    ...context,
-  }, `Admin action: ${action}`);
+    ...redact(context || {}),
+  });
 }
 
 // Default export

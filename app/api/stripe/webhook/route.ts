@@ -9,22 +9,23 @@ export const revalidate = 0;
 const isNode = () => typeof process !== 'undefined' && !!process.versions?.node;
 
 export async function POST(request: NextRequest) {
-  try {
-    // Only import server-only libs inside the handler, after we're on Node
-    if (!isNode()) {
-      return NextResponse.json(
-        { error: "Server environment required" },
-        { status: 500 }
-      );
-    }
+  // Only import server-only libs inside the handler, after we're on Node
+  if (!isNode()) {
+    return NextResponse.json(
+      { error: "Server environment required" },
+      { status: 500 }
+    );
+  }
 
-    // Dynamic imports for server-only functionality
-    const Stripe = (await import("stripe")).default;
-    const { createAdminClient } = await import("@/lib/supabase/client");
-    const { headers } = await import("next/headers");
-    // Removed logger import to prevent worker_threads error
-    const { env } = await import("@/lib/config/env");
-    const { sendOrderConfirmationEmail } = await import("@/lib/email/resend");
+  // Dynamic imports for server-only functionality
+  const Stripe = (await import("stripe")).default;
+  const { createAdminClient } = await import("@/lib/supabase/client");
+  const { headers } = await import("next/headers");
+  const { withContext, logWebhook, safeError } = await import("@/lib/logger");
+  const { env } = await import("@/lib/config/env");
+  const { sendOrderConfirmationEmail } = await import("@/lib/email/resend");
+
+  try {
 
     const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
       apiVersion: "2025-02-24.acacia",
@@ -52,10 +53,8 @@ export async function POST(request: NextRequest) {
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     } catch (err) {
-      console.error('webhook_signature_verification error:', err, {
-        context: 'webhook_signature_verification',
-        hasSignature: !!signature,
-      });
+      const log = withContext({ route: '/api/stripe/webhook', reqId: crypto.randomUUID() });
+      log.error('webhook_signature_verification error', { error: safeError(err), hasSignature: !!signature });
       
       return NextResponse.json(
         { error: "Invalid signature" },
@@ -73,11 +72,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
-      console.error(new Error(checkError.message), {
-        context: 'webhook_idempotency_check',
-        eventId: event.id,
-        eventType: event.type,
-      });
+      const log = withContext({ route: '/api/stripe/webhook', reqId: crypto.randomUUID() });
+      log.error('webhook_idempotency_check error', { error: safeError(new Error(checkError.message)), eventId: event.id, eventType: event.type });
       
       return NextResponse.json(
         { error: "Database error" },
@@ -87,10 +83,7 @@ export async function POST(request: NextRequest) {
 
     if (existingEvent) {
       if (existingEvent.processing_status === 'completed') {
-        console.log(event.type, event.id, {
-          status: 'already_processed',
-          message: 'Event already processed successfully',
-        });
+        logWebhook(event.type, event.id, { status: 'already_processed', message: 'Event already processed successfully' });
         
         return NextResponse.json({ 
           received: true, 
@@ -99,10 +92,7 @@ export async function POST(request: NextRequest) {
       }
       
       if (existingEvent.processing_status === 'processing') {
-        console.log(event.type, event.id, {
-          status: 'currently_processing',
-          message: 'Event is currently being processed',
-        });
+        logWebhook(event.type, event.id, { status: 'currently_processing', message: 'Event is currently being processed' });
         
         return NextResponse.json({ 
           received: true, 
@@ -129,11 +119,8 @@ export async function POST(request: NextRequest) {
       });
 
     if (insertError) {
-      console.error(new Error(insertError.message), {
-        context: 'webhook_event_recording',
-        eventId: event.id,
-        eventType: event.type,
-      });
+      const log = withContext({ route: '/api/stripe/webhook', reqId: crypto.randomUUID() });
+      log.error('webhook_event_recording error', { error: safeError(new Error(insertError.message)), eventId: event.id, eventType: event.type });
       
       return NextResponse.json(
         { error: "Failed to record event" },
@@ -141,14 +128,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(event.type, event.id, {
-      status: 'processing_started',
-      livemode: event.livemode,
-    });
+    logWebhook(event.type, event.id, { status: 'processing_started', livemode: event.livemode });
 
     try {
       // Process the webhook event
-      await processWebhookEvent(event, supabase, env, sendOrderConfirmationEmail);
+      await processWebhookEvent(event, supabase, env, sendOrderConfirmationEmail, logWebhook, withContext, safeError);
 
       // Mark event as completed
       await supabase
@@ -159,10 +143,7 @@ export async function POST(request: NextRequest) {
         })
         .eq("event_id", event.id);
 
-      console.log(event.type, event.id, {
-        status: 'completed',
-        message: 'Event processed successfully',
-      });
+      logWebhook(event.type, event.id, { status: 'completed', message: 'Event processed successfully' });
 
       return NextResponse.json({ received: true });
 
@@ -177,11 +158,8 @@ export async function POST(request: NextRequest) {
         })
         .eq("event_id", event.id);
 
-      console.error(processingError as Error, {
-        context: 'webhook_event_processing',
-        eventId: event.id,
-        eventType: event.type,
-      });
+      const log = withContext({ route: '/api/stripe/webhook', reqId: crypto.randomUUID() });
+      log.error('webhook_event_processing error', { error: safeError(processingError), eventId: event.id, eventType: event.type });
 
       return NextResponse.json(
         { error: "Event processing failed" },
@@ -190,7 +168,8 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('webhook_route error:', error);
+    const log = withContext({ route: '/api/stripe/webhook', reqId: crypto.randomUUID() });
+    log.error('webhook_route error', { error: safeError(error) });
     
     return NextResponse.json(
       { error: "Webhook handler failed" },
@@ -204,7 +183,10 @@ async function processWebhookEvent(
   event: unknown, 
   supabase: unknown, 
   env: unknown, 
-  sendOrderConfirmationEmail: unknown
+  sendOrderConfirmationEmail: unknown,
+  logWebhook: (event: string, eventId: string, context?: Record<string, unknown>) => void,
+  withContext: (ctx: Record<string, unknown>) => { error: (msg: string, meta?: Record<string, unknown>) => void },
+  safeError: (err: unknown) => Record<string, unknown>
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedEvent = event as any;
@@ -278,25 +260,16 @@ async function processWebhookEvent(
             });
 
             if (!emailResult.success) {
-              console.error('email_confirmation_failed error:', new Error(`Failed to send confirmation email: ${emailResult.error}`), {
-                context: 'email_confirmation_failed',
-                orderNumber: order.id,
-                customerEmail: session.customer_details.email,
-              });
+              const log = withContext({ route: '/api/stripe/webhook', reqId: crypto.randomUUID() });
+              log.error('email_confirmation_failed error', { error: safeError(new Error(`Failed to send confirmation email: ${emailResult.error}`)), orderNumber: order.id, customerEmail: session.customer_details.email });
             }
           }
         } catch (emailError) {
-          console.error('email_confirmation_error:', emailError as Error, {
-            context: 'email_confirmation_error',
-            sessionId: session.id,
-          });
+          const log = withContext({ route: '/api/stripe/webhook', reqId: crypto.randomUUID() });
+          log.error('email_confirmation_error', { error: safeError(emailError), sessionId: session.id });
         }
 
-        console.log('payment_processed', typedEvent.id, {
-          sessionId: session.id,
-          planType: session.metadata?.plan_type,
-          kitId: session.metadata?.kit_id,
-        });
+        logWebhook('payment_processed', typedEvent.id, { sessionId: session.id, planType: session.metadata?.plan_type, kitId: session.metadata?.kit_id });
       }
       break;
     }
@@ -338,9 +311,6 @@ async function processWebhookEvent(
     }
 
     default:
-      console.log('unhandled_event', typedEvent.id, {
-        eventType: typedEvent.type,
-        message: `Unhandled event type: ${typedEvent.type}`,
-      });
+      logWebhook('unhandled_event', typedEvent.id, { eventType: typedEvent.type, message: `Unhandled event type: ${typedEvent.type}` });
   }
 }
