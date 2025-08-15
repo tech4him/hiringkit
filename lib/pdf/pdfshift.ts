@@ -41,10 +41,10 @@ export async function generatePDFWithPDFShift(html: string, options: Partial<PDF
     source: html,
     format: "Letter",
     margin: {
-      top: "1in",
-      bottom: "1in",
-      left: "0.75in",
-      right: "0.75in"
+      top: "0.75in",
+      bottom: "0.75in",
+      left: "0.5in",
+      right: "0.5in"
     },
     ...options
   };
@@ -302,12 +302,46 @@ function getKitCSS(): string {
     
     .page {
       page-break-after: always;
-      padding: 1in 0.75in;
+      page-break-inside: avoid;
+      padding: 0.75in 0.5in;
       min-height: 11in;
     }
     
     .page:last-child {
       page-break-after: auto;
+    }
+    
+    /* Prevent breaking inside key elements */
+    .keep-together {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    
+    .scorecard-table,
+    .rubric-table,
+    .process-step,
+    .interview-question,
+    .reference-question {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    
+    /* Add orphan and widow control */
+    p, li {
+      orphans: 3;
+      widows: 3;
+    }
+    
+    /* Ensure headers stay with content */
+    h1, h2, h3, h4 {
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    
+    /* Keep lists together when possible */
+    ul, ol {
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     
     h1 {
@@ -459,7 +493,7 @@ function generateScorecard(scorecard: Scorecard): string {
     <div class="page">
       <h1>Role Scorecard</h1>
       
-      <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+      <div class="keep-together" style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <h2 style="margin-top: 0;">Mission</h2>
         <p>${scorecard.mission || ""}</p>
       </div>
@@ -524,7 +558,7 @@ function generateJobPost(jobPost: JobPost): string {
     <div class="page">
       <h1>Job Post</h1>
       
-      <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+      <div class="keep-together" style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px;">
         <h2 style="margin-top: 0; color: #1F4B99;">Job Description</h2>
         <p style="font-size: 16px; line-height: 1.6;">${jobPost.intro || ""}</p>
       </div>
@@ -552,7 +586,7 @@ function generateJobPost(jobPost: JobPost): string {
       <h3>Compensation</h3>
       <p>${jobPost.comp || "Competitive compensation package"}</p>
       
-      <div style="margin-top: 30px; padding: 20px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #1F4B99;">
+      <div class="keep-together" style="margin-top: 30px; padding: 20px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #1F4B99;">
         <h4 style="margin-top: 0; color: #1F4B99;">How to Apply</h4>
         <p style="margin-bottom: 0;">${jobPost.apply || "Submit your application through our careers page."}</p>
       </div>
@@ -585,7 +619,7 @@ function generateInterviewGuide(stage: InterviewStage, stageNumber: number): str
       
       <h3>Interview Questions</h3>
       ${(stage.questions || []).map((q: InterviewQuestion, i: number) => `
-        <div style="margin: 24px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <div class="interview-question" style="margin: 24px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
           <h4 style="color: #1F4B99;">Question ${i + 1}</h4>
           <p style="font-size: 16px; font-weight: 500; margin: 12px 0;">${q.question}</p>
           
@@ -621,7 +655,7 @@ function generateInterviewGuide(stage: InterviewStage, stageNumber: number): str
         </table>
       ` : ""}
       
-      <div style="margin-top: 30px; padding: 16px; background: #fff3cd; border-radius: 8px;">
+      <div class="keep-together" style="margin-top: 30px; padding: 16px; background: #fff3cd; border-radius: 8px;">
         <h4 style="margin-top: 0;">💡 Interview Tips</h4>
         <ul style="margin-bottom: 0;">
           <li>Give candidates time to think before answering</li>
@@ -641,7 +675,7 @@ function generateWorkSample(workSample: WorkSample): string {
     <div class="page">
       <h1>Work Sample Assignment</h1>
       
-      <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+      <div class="keep-together" style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <h2 style="margin-top: 0; color: #1F4B99;">Scenario-Based Assessment</h2>
         <p style="font-size: 16px; line-height: 1.6;">${workSample.scenario || ""}</p>
       </div>
@@ -679,7 +713,7 @@ function generateWorkSample(workSample: WorkSample): string {
         </table>
       ` : ""}
       
-      <div style="margin-top: 30px; padding: 16px; background: #e3f2fd; border-radius: 8px;">
+      <div class="keep-together" style="margin-top: 30px; padding: 16px; background: #e3f2fd; border-radius: 8px;">
         <h4 style="margin-top: 0; color: #1F4B99;">Submission Guidelines</h4>
         <ul style="margin-bottom: 0;">
           <li>Submit your response as a structured document (Word/PDF)</li>
@@ -706,7 +740,7 @@ function generateReferenceCheck(referenceCheck: ReferenceCheck): string {
       
       <h2>Reference Questions</h2>
       ${(referenceCheck.questions || []).map((question: string, i: number) => `
-        <div style="margin: 24px 0; padding: 16px; border: 1px solid #ddd; border-radius: 8px;">
+        <div class="reference-question" style="margin: 24px 0; padding: 16px; border: 1px solid #ddd; border-radius: 8px;">
           <h3 style="color: #1F4B99;">Question ${i + 1}</h3>
           <p style="font-weight: 500; margin: 12px 0;">${question}</p>
           
@@ -722,7 +756,7 @@ function generateReferenceCheck(referenceCheck: ReferenceCheck): string {
         <p>"Thank you so much for your time and insights about [Candidate Name]. This information is very helpful for our decision-making process. If we have any follow-up questions, would it be okay to reach out to you again? Have a great day!"</p>
       </div>
       
-      <div style="margin-top: 30px; padding: 16px; background: #fff3cd; border-radius: 8px;">
+      <div class="keep-together" style="margin-top: 30px; padding: 16px; background: #fff3cd; border-radius: 8px;">
         <h4 style="margin-top: 0;">📝 Reference Check Tips</h4>
         <ul style="margin-bottom: 0; font-size: 14px;">
           <li>Take detailed notes during the conversation</li>
@@ -750,7 +784,7 @@ function generateProcessMap(processMap: ProcessMap): string {
       
       <h2>Process Steps</h2>
       ${(processMap.steps || []).map((step: ProcessStep, i: number) => `
-        <div style="margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; position: relative;">
+        <div class="process-step" style="margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; position: relative;">
           <div style="position: absolute; top: -12px; left: 20px; background: #1F4B99; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
             Step ${i + 1}
           </div>
@@ -774,7 +808,7 @@ function generateProcessMap(processMap: ProcessMap): string {
         `).join("")}
       </div>
       
-      <div style="margin-top: 30px; padding: 16px; background: #e8f5e8; border-radius: 8px;">
+      <div class="keep-together" style="margin-top: 30px; padding: 16px; background: #e8f5e8; border-radius: 8px;">
         <h4 style="margin-top: 0;">✨ Process Success Tips</h4>
         <ul style="margin-bottom: 0; font-size: 14px;">
           <li>Communicate with candidates at each stage to manage expectations</li>
@@ -794,7 +828,7 @@ function generateEEOGuidelines(eeo: EEOGuidelines): string {
     <div class="page">
       <h1>EEO Guidelines & Bias Mitigation</h1>
       
-      <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+      <div class="keep-together" style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
         <h2 style="margin-top: 0;">⚠️ Important Legal Notice</h2>
         <p style="margin-bottom: 0;">These guidelines help ensure compliance with equal employment opportunity laws and promote fair, unbiased hiring practices.</p>
       </div>
@@ -805,7 +839,7 @@ function generateEEOGuidelines(eeo: EEOGuidelines): string {
       </ul>
       
       <h2>Prohibited Interview Topics</h2>
-      <div style="background: #ffe6e6; padding: 16px; border-radius: 8px; border-left: 4px solid #dc3545;">
+      <div class="keep-together" style="background: #ffe6e6; padding: 16px; border-radius: 8px; border-left: 4px solid #dc3545;">
         <p><strong>Never ask about or discuss:</strong></p>
         <ul>
           <li>Age, birth date, or graduation dates</li>
@@ -820,7 +854,7 @@ function generateEEOGuidelines(eeo: EEOGuidelines): string {
       </div>
       
       <h2>What You CAN Ask</h2>
-      <div style="background: #e8f5e8; padding: 16px; border-radius: 8px; border-left: 4px solid #28a745;">
+      <div class="keep-together" style="background: #e8f5e8; padding: 16px; border-radius: 8px; border-left: 4px solid #28a745;">
         <ul>
           <li>Job-related skills and experience</li>
           <li>Ability to perform essential job functions</li>
@@ -832,7 +866,7 @@ function generateEEOGuidelines(eeo: EEOGuidelines): string {
       </div>
       
       <h2>Bias Mitigation Checklist</h2>
-      <div style="background: #f8f9fa; padding: 16px; border-radius: 8px;">
+      <div class="keep-together" style="background: #f8f9fa; padding: 16px; border-radius: 8px;">
         <ul style="list-style-type: none; padding-left: 0;">
           <li>☐ Use the same questions for all candidates in the same role</li>
           <li>☐ Focus on job-related competencies and requirements</li>
@@ -843,7 +877,7 @@ function generateEEOGuidelines(eeo: EEOGuidelines): string {
         </ul>
       </div>
       
-      <div style="margin-top: 30px; background: #e3f2fd; padding: 16px; border-radius: 8px;">
+      <div class="keep-together" style="margin-top: 30px; background: #e3f2fd; padding: 16px; border-radius: 8px;">
         <h3 style="margin-top: 0; color: #1F4B99;">Equal Opportunity Statement</h3>
         <p style="margin-bottom: 0; font-style: italic;">${eeo.disclaimer || "We are an equal opportunity employer committed to creating an inclusive environment for all employees."}</p>
       </div>
