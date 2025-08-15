@@ -55,6 +55,9 @@ export interface Kit {
   edited_json?: KitArtifacts
   qa_required: boolean
   qa_notes?: string
+  regen_counts?: Record<string, number>
+  edited_at?: string
+  order_id?: string
   created_at: string
   updated_at: string
 }

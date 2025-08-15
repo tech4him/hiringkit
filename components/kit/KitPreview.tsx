@@ -25,10 +25,25 @@ interface KitPreviewProps {
   isGenerating: boolean;
   hasGenerated: boolean;
   onUnlock: () => void;
+  editedArtifacts?: Partial<KitArtifacts> | null;
+  isRegenerating?: Record<string, boolean>;
 }
 
-export function KitPreview({ artifacts, isGenerating, hasGenerated, onUnlock }: KitPreviewProps) {
+export function KitPreview({ 
+  artifacts, 
+  isGenerating, 
+  hasGenerated, 
+  onUnlock, 
+  editedArtifacts,
+  isRegenerating = {} 
+}: KitPreviewProps) {
   const [activeTab, setActiveTab] = useState("scorecard");
+  
+  // Merge edited artifacts with original artifacts for display
+  const displayArtifacts = artifacts ? {
+    ...artifacts,
+    ...editedArtifacts,
+  } : null;
 
   if (isGenerating) {
     return (
@@ -103,7 +118,7 @@ export function KitPreview({ artifacts, isGenerating, hasGenerated, onUnlock }: 
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap relative ${
                 activeTab === tab.id
                   ? "bg-[#1F4B99] text-white"
                   : "text-gray-600 hover:bg-gray-100"
@@ -111,6 +126,9 @@ export function KitPreview({ artifacts, isGenerating, hasGenerated, onUnlock }: 
             >
               <tab.icon className="h-4 w-4" />
               {tab.label}
+              {isRegenerating[tab.id] && (
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
+              )}
             </button>
           ))}
         </div>
@@ -140,7 +158,11 @@ export function KitPreview({ artifacts, isGenerating, hasGenerated, onUnlock }: 
               showPaywallModal();
             }}
           >
-            <PreviewContent artifacts={artifacts} activeTab={activeTab} />
+            <PreviewContent 
+              artifacts={displayArtifacts} 
+              activeTab={activeTab} 
+              isRegenerating={isRegenerating[activeTab]} 
+            />
           </div>
 
           {/* Gradient fade overlay at bottom */}
@@ -188,9 +210,38 @@ export function KitPreview({ artifacts, isGenerating, hasGenerated, onUnlock }: 
   );
 }
 
-function PreviewContent({ artifacts, activeTab }: { artifacts: KitArtifacts | null; activeTab: string }) {
+function PreviewContent({ 
+  artifacts, 
+  activeTab, 
+  isRegenerating 
+}: { 
+  artifacts: KitArtifacts | null; 
+  activeTab: string; 
+  isRegenerating?: boolean; 
+}) {
   if (!artifacts) return <div>No preview available</div>;
 
+  // Show regenerating overlay for the active section
+  if (isRegenerating) {
+    return (
+      <div className="relative">
+        <div className="opacity-50">
+          {renderSectionContent(artifacts, activeTab)}
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-[#1F4B99] mx-auto mb-2" />
+            <p className="text-sm text-gray-600">Regenerating section...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return renderSectionContent(artifacts, activeTab);
+}
+
+function renderSectionContent(artifacts: KitArtifacts, activeTab: string) {
   switch (activeTab) {
     case "scorecard":
       return <ScorecardPreview scorecard={artifacts.scorecard} />;

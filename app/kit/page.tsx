@@ -3,8 +3,11 @@
 import { useState, useEffect, Suspense } from "react";
 import { IntakeForm } from "@/components/kit/IntakeForm";
 import { KitPreview } from "@/components/kit/KitPreview";
+import { EditLiteForm } from "@/components/kit/EditLiteForm";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { IntakeData, Kit, KitArtifacts } from "@/types";
+import { useEditLite } from "@/hooks/useEditLite";
+import { useRegenLimits } from "@/hooks/useRegenLimits";
+import type { IntakeData, Kit, KitArtifacts, ArtifactType } from "@/types";
 
 // Component that uses useSearchParams - must be wrapped in Suspense
 function KitPageContent() {
@@ -23,8 +26,22 @@ function KitPageContent() {
 
   const [kit, setKit] = useState<Kit | null>(null);
   const [artifacts, setArtifacts] = useState<KitArtifacts | null>(null);
+  const [editedArtifacts, setEditedArtifacts] = useState<Partial<KitArtifacts> | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [showEditLite, setShowEditLite] = useState(false);
+
+  // Edit-lite hooks (always call hooks unconditionally)
+  const editLite = useEditLite({
+    kitId: kit?.id || '',
+    initialData: kit?.intake_json || {} as IntakeData
+  });
+
+  const regenLimits = useRegenLimits({
+    kitId: kit?.id || '',
+    initialCounts: kit?.regen_counts || {},
+    isPaid: Boolean(kit?.order_id)
+  });
 
   // Auto-save intake to localStorage
   useEffect(() => {
@@ -81,6 +98,7 @@ function KitPageContent() {
       setArtifacts(result.data.artifacts);
       setIntakeData(result.data.intake); // Update with AI-filled data
       setHasGenerated(true);
+      setShowEditLite(true); // Show edit-lite after generation
     } catch (error) {
       console.error("Generation error:", error);
       alert(error instanceof Error ? error.message : "Failed to generate kit. Please try again.");
@@ -114,11 +132,39 @@ function KitPageContent() {
       setKit(result.data.kit);
       setArtifacts(result.data.artifacts);
       setHasGenerated(true);
+      setShowEditLite(true); // Show edit-lite after generation
     } catch (error) {
       console.error("Generation error:", error);
       alert(error instanceof Error ? error.message : "Failed to generate kit. Please try again.");
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Edit-lite handlers
+  const handleInputUpdate = async (updates: Partial<IntakeData>) => {
+    if (!kit || !editLite) return;
+    try {
+      await editLite.updateInputs(updates);
+    } catch (error) {
+      console.error('Input update error:', error);
+      alert('Failed to update inputs. Please try again.');
+    }
+  };
+
+  const handleSectionRegenerate = async (section: string, styleSettings?: Record<string, string>) => {
+    if (!kit || !regenLimits) return;
+    try {
+      const result = await regenLimits.regenerateSection(section as ArtifactType, styleSettings);
+      
+      // Update edited artifacts with the new section
+      setEditedArtifacts(prev => ({
+        ...prev,
+        [section]: result.section
+      }));
+    } catch (error) {
+      console.error('Section regeneration error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to regenerate section. Please try again.');
     }
   };
 
@@ -163,22 +209,56 @@ function KitPageContent() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid lg:grid-cols-2 gap-6 h-[calc(100vh-120px)]">
-          {/* Left Pane - Intake Form */}
+          {/* Left Pane - Conditional Form */}
           <div className="bg-white rounded-lg shadow-sm border h-full overflow-hidden">
-            <IntakeForm
-              data={intakeData}
-              onChange={handleIntakeChange}
-              onExpressGenerate={handleExpressGenerate}
-              onFullGenerate={handleFullGenerate}
-              isGenerating={isGenerating}
-              hasGenerated={hasGenerated}
-            />
+            {!showEditLite ? (
+              <IntakeForm
+                data={intakeData}
+                onChange={handleIntakeChange}
+                onExpressGenerate={handleExpressGenerate}
+                onFullGenerate={handleFullGenerate}
+                isGenerating={isGenerating}
+                hasGenerated={hasGenerated}
+              />
+            ) : kit ? (
+              <EditLiteForm
+                kit={kit}
+                onInputUpdate={handleInputUpdate}
+                onSectionRegenerate={handleSectionRegenerate}
+                isUpdating={editLite?.isUpdating || false}
+                isPaid={Boolean(kit.order_id)}
+                onUnlock={() => {
+                  if (!kit?.id) {
+                    console.error('No kit ID available for checkout');
+                    alert('Please generate a kit first before proceeding to checkout.');
+                    return;
+                  }
+                  router.push(`/kit/${kit.id}/checkout`);
+                }}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-gray-500">Loading edit interface...</p>
+              </div>
+            )}
           </div>
 
           {/* Right Pane - Preview */}
           <div className="bg-white rounded-lg shadow-sm border h-full overflow-hidden">
             <KitPreview
               artifacts={artifacts}
+              editedArtifacts={editedArtifacts}
+              isRegenerating={regenLimits ? {
+                scorecard: regenLimits.isRegenerating('scorecard'),
+                job_post: regenLimits.isRegenerating('job_post'),
+                interview_stage1: regenLimits.isRegenerating('interview_stage1'),
+                interview_stage2: regenLimits.isRegenerating('interview_stage2'),
+                interview_stage3: regenLimits.isRegenerating('interview_stage3'),
+                work_sample: regenLimits.isRegenerating('work_sample'),
+                reference_check: regenLimits.isRegenerating('reference_check'),
+                process_map: regenLimits.isRegenerating('process_map'),
+                eeo: regenLimits.isRegenerating('eeo'),
+              } : {}}
               isGenerating={isGenerating}
               hasGenerated={hasGenerated}
               onUnlock={() => {
