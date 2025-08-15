@@ -352,9 +352,10 @@ function getKitCSS(): string {
     /* Ensure process steps don't split */
     .process-step {
       display: block;
-      page-break-inside: avoid;
-      break-inside: avoid;
-      margin-bottom: 20px;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+      position: relative;
+      overflow: visible;
     }
     
     h1 {
@@ -800,20 +801,24 @@ function generateProcessMap(processMap: ProcessMap): string {
       
       <h2>Process Steps</h2>
       ${(processMap.steps || []).map((step: ProcessStep, i: number) => `
-        <div class="process-step keep-together" style="padding: 20px; border: 1px solid #ddd; border-radius: 8px; position: relative; page-break-inside: avoid; break-inside: avoid;">
-          <div style="position: absolute; top: -12px; left: 20px; background: #1F4B99; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
-            Step ${i + 1}
+        <div class="process-step keep-together" style="border: 1px solid #ddd; border-radius: 8px; page-break-inside: avoid; break-inside: avoid; margin-bottom: 24px; overflow: visible;">
+          <div style="display: flex; align-items: center; padding: 12px 20px; background: #f8f9fa; border-bottom: 1px solid #ddd; border-radius: 8px 8px 0 0;">
+            <span style="background: #1F4B99; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-right: 12px;">
+              Step ${i + 1}
+            </span>
+            <h3 style="margin: 0; color: #1F4B99; flex: 1;">${step.name}</h3>
           </div>
-          <h3 style="margin-top: 12px; color: #1F4B99;">${step.name}</h3>
-          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 16px 0;">
-            <div>
-              <strong>Duration:</strong> ${step.duration || "TBD"}
+          <div style="padding: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px;">
+              <div>
+                <strong>Duration:</strong> ${step.duration || "TBD"}
+              </div>
+              <div>
+                <strong>Owner:</strong> ${step.owner || "Hiring Manager"}
+              </div>
             </div>
-            <div>
-              <strong>Owner:</strong> ${step.owner || "Hiring Manager"}
-            </div>
+            <p style="margin-bottom: 0;">${step.description || ""}</p>
           </div>
-          <p style="margin-bottom: 0;">${step.description || ""}</p>
         </div>
       `).join("")}
       
