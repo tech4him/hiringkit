@@ -208,7 +208,7 @@ function generateKitHTML(kit: Kit, artifacts: KitArtifacts): string {
     <!-- SECTION:WORK_SAMPLE:END -->
     
     <!-- SECTION:REFERENCE:START -->
-    ${generateReferenceCheck(artifacts.reference_check)}
+    ${generateReferenceCheck(artifacts.reference_check, kit)}
     <!-- SECTION:REFERENCE:END -->
     
     <!-- SECTION:PROCESS:START -->
@@ -247,7 +247,7 @@ function generateArtifactHTML(kit: Kit, artifacts: KitArtifacts, artifactType: s
       content = generateWorkSample(artifacts.work_sample);
       break;
     case "reference_check":
-      content = generateReferenceCheck(artifacts.reference_check);
+      content = generateReferenceCheck(artifacts.reference_check, kit);
       break;
     case "process_map":
       content = generateProcessMap(artifacts.process_map);
@@ -342,6 +342,19 @@ function getKitCSS(): string {
     ul, ol {
       page-break-inside: avoid;
       break-inside: avoid;
+    }
+    
+    /* Force page breaks before major sections if needed */
+    .force-page-break {
+      page-break-before: always;
+    }
+    
+    /* Ensure process steps don't split */
+    .process-step {
+      display: block;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      margin-bottom: 20px;
     }
     
     h1 {
@@ -726,16 +739,19 @@ function generateWorkSample(workSample: WorkSample): string {
   `;
 }
 
-function generateReferenceCheck(referenceCheck: ReferenceCheck): string {
+function generateReferenceCheck(referenceCheck: ReferenceCheck, kit?: Kit): string {
   if (!referenceCheck) return "";
+  
+  // Get the role title from kit data, fallback to generic if not available
+  const roleTitle = kit?.intake_json?.role_title || "[Role Title]";
   
   return `
     <div class="page">
       <h1>Reference Check Script</h1>
       
       <h2>Introduction Script</h2>
-      <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin: 20px 0;">
-        <p>"Hi [Reference Name], thank you for taking the time to speak with me about [Candidate Name]. We're considering them for a Partner Support Coordinator role at our organization, and [Candidate Name] listed you as a reference. I have a few questions that should take about 10-15 minutes. Is now a good time?"</p>
+      <div class="keep-together" style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin: 20px 0;">
+        <p>"Hi [Reference Name], thank you for taking the time to speak with me about [Candidate Name]. We're considering them for a ${roleTitle} role at our organization, and [Candidate Name] listed you as a reference. I have a few questions that should take about 10-15 minutes. Is now a good time?"</p>
       </div>
       
       <h2>Reference Questions</h2>
@@ -752,7 +768,7 @@ function generateReferenceCheck(referenceCheck: ReferenceCheck): string {
       `).join("")}
       
       <h2>Closing Script</h2>
-      <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin: 20px 0;">
+      <div class="keep-together" style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin: 20px 0;">
         <p>"Thank you so much for your time and insights about [Candidate Name]. This information is very helpful for our decision-making process. If we have any follow-up questions, would it be okay to reach out to you again? Have a great day!"</p>
       </div>
       
@@ -777,14 +793,14 @@ function generateProcessMap(processMap: ProcessMap): string {
     <div class="page">
       <h1>Hiring Process Map</h1>
       
-      <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+      <div class="keep-together" style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <h2 style="margin-top: 0; color: #1F4B99;">Process Overview</h2>
         <p style="margin-bottom: 0;">This structured hiring process ensures we find the best candidate while providing a positive experience for all applicants.</p>
       </div>
       
       <h2>Process Steps</h2>
       ${(processMap.steps || []).map((step: ProcessStep, i: number) => `
-        <div class="process-step" style="margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; position: relative;">
+        <div class="process-step keep-together" style="padding: 20px; border: 1px solid #ddd; border-radius: 8px; position: relative; page-break-inside: avoid; break-inside: avoid;">
           <div style="position: absolute; top: -12px; left: 20px; background: #1F4B99; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
             Step ${i + 1}
           </div>
@@ -797,12 +813,12 @@ function generateProcessMap(processMap: ProcessMap): string {
               <strong>Owner:</strong> ${step.owner || "Hiring Manager"}
             </div>
           </div>
-          <p>${step.description || ""}</p>
+          <p style="margin-bottom: 0;">${step.description || ""}</p>
         </div>
       `).join("")}
       
       <h2>Timeline Summary</h2>
-      <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+      <div class="keep-together" style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
         ${(processMap.pacing || []).map((phase: string) => `
           <div style="margin: 8px 0; padding: 8px; background: white; border-radius: 4px;">${phase}</div>
         `).join("")}
