@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,16 +14,29 @@ import {
   Calendar
 } from "lucide-react";
 
+// TypeScript interfaces for admin data
+interface AdminKit {
+  title: string;
+}
+
+interface AdminOrder {
+  id: string;
+  kit_id: string;
+  user_id: string;
+  status: "draft" | "awaiting_payment" | "paid" | "qa_pending" | "ready" | "delivered";
+  total_cents: number;
+  created_at: string;
+  kits?: AdminKit;
+}
+
+type FilterStatus = "all" | "qa_pending" | "paid";
+
 export default function AdminPage() {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "qa_pending" | "paid">("qa_pending");
+  const [filter, setFilter] = useState<FilterStatus>("qa_pending");
 
-  useEffect(() => {
-    loadOrders();
-  }, [filter]);
-
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/admin/orders?status=${filter}`);
@@ -36,7 +49,11 @@ export default function AdminPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
 
   const handleApproveKit = async (kitId: string) => {
     try {
@@ -68,7 +85,7 @@ export default function AdminPage() {
       case "delivered":
         return <Badge variant="secondary" className="bg-gray-100 text-gray-800"><CheckCircle className="h-3 w-3 mr-1" />Delivered</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
@@ -88,21 +105,21 @@ export default function AdminPage() {
             </div>
             <div className="flex items-center gap-3">
               <Button
-                variant={filter === "qa_pending" ? "default" : "outline"}
+                variant={filter === "qa_pending" ? "default" : "secondary"}
                 onClick={() => setFilter("qa_pending")}
                 size="sm"
               >
                 QA Queue
               </Button>
               <Button
-                variant={filter === "paid" ? "default" : "outline"}
+                variant={filter === "paid" ? "default" : "secondary"}
                 onClick={() => setFilter("paid")}
                 size="sm"
               >
                 Ready Kits
               </Button>
               <Button
-                variant={filter === "all" ? "default" : "outline"}
+                variant={filter === "all" ? "default" : "secondary"}
                 onClick={() => setFilter("all")}
                 size="sm"
               >
@@ -123,7 +140,7 @@ export default function AdminPage() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Pending Review</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {orders.filter((order: any) => order.status === "qa_pending").length}
+                    {orders.filter((order) => order.status === "qa_pending").length}
                   </p>
                 </div>
               </div>
@@ -137,7 +154,7 @@ export default function AdminPage() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Ready</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {orders.filter((order: any) => order.status === "ready").length}
+                    {orders.filter((order) => order.status === "ready").length}
                   </p>
                 </div>
               </div>
@@ -151,7 +168,7 @@ export default function AdminPage() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Revenue</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    ${orders.reduce((sum: number, order: any) => sum + (order.total_cents / 100), 0).toFixed(0)}
+                    ${orders.reduce((sum, order) => sum + (order.total_cents / 100), 0).toFixed(0)}
                   </p>
                 </div>
               </div>
@@ -202,7 +219,7 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {orders.map((order: any) => (
+                    {orders.map((order) => (
                       <tr key={order.id} className="border-b hover:bg-gray-50">
                         <td className="py-3 px-4">
                           <div>
@@ -211,7 +228,7 @@ export default function AdminPage() {
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <Badge variant="outline">
+                          <Badge variant="secondary">
                             {getPlanType(order.total_cents)}
                           </Badge>
                         </td>
@@ -238,7 +255,7 @@ export default function AdminPage() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               onClick={() => window.open(`/kit/${order.kit_id}`, '_blank')}
                             >

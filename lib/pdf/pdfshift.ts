@@ -1,4 +1,4 @@
-import { Kit, KitArtifacts } from "@/types";
+import { Kit, KitArtifacts, Scorecard, JobPost, InterviewStages, InterviewStage, InterviewQuestion, RubricRow, WorkSample, ScoringCriteria, ReferenceCheck, ProcessMap, ProcessStep, EEOGuidelines } from "@/types";
 import { env, isDevelopment } from "@/lib/config/env";
 import { logError, logPerformance } from "@/lib/logger";
 
@@ -27,7 +27,7 @@ export async function generatePDFWithPDFShift(html: string, options: Partial<PDF
       htmlLength: html.length,
     });
     
-    return generateMockPDF(html);
+    return generateMockPDF();
   }
 
   const apiKey = env.PDFSHIFT_API_KEY;
@@ -87,7 +87,7 @@ export async function generatePDFWithPDFShift(html: string, options: Partial<PDF
 }
 
 // Generate mock PDF for development
-function generateMockPDF(html: string): Buffer {
+function generateMockPDF(): Buffer {
   const mockPdfContent = `%PDF-1.4
 1 0 obj
 <<
@@ -187,7 +187,7 @@ function generateKitHTML(kit: Kit, artifacts: KitArtifacts): string {
 <body>
   <div class="container">
     <!-- SECTION:COVER:START -->
-    ${generateCoverPage(kit, artifacts)}
+    ${generateCoverPage(kit)}
     <!-- SECTION:COVER:END -->
     
     <!-- SECTION:SCORECARD:START -->
@@ -411,7 +411,7 @@ function getKitCSS(): string {
 }
 
 // Template generation functions
-function generateCoverPage(kit: Kit, artifacts: KitArtifacts): string {
+function generateCoverPage(kit: Kit): string {
   if (!kit?.intake_json) {
     return '<div class="page cover-page"><h1>Invalid Kit Data</h1></div>';
   }
@@ -451,7 +451,7 @@ function generateCoverPage(kit: Kit, artifacts: KitArtifacts): string {
   `;
 }
 
-function generateScorecard(scorecard: any): string {
+function generateScorecard(scorecard: Scorecard): string {
   if (!scorecard) return "";
   
   return `
@@ -516,7 +516,7 @@ function generateScorecard(scorecard: any): string {
   `;
 }
 
-function generateJobPost(jobPost: any): string {
+function generateJobPost(jobPost: JobPost): string {
   if (!jobPost) return "";
   
   return `
@@ -524,7 +524,7 @@ function generateJobPost(jobPost: any): string {
       <h1>Job Post</h1>
       
       <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-        <h2 style="margin-top: 0; color: #1F4B99;">${jobPost.title || "Position Title"}</h2>
+        <h2 style="margin-top: 0; color: #1F4B99;">Job Description</h2>
         <p style="font-size: 16px; line-height: 1.6;">${jobPost.intro || ""}</p>
       </div>
       
@@ -559,14 +559,14 @@ function generateJobPost(jobPost: any): string {
   `;
 }
 
-function generateInterviewGuides(interview: any): string {
+function generateInterviewGuides(interview: InterviewStages): string {
   if (!interview) return "";
   
   const stages = [interview.stage1, interview.stage2, interview.stage3].filter(Boolean);
   return stages.map((stage, index) => generateInterviewGuide(stage, index + 1)).join("");
 }
 
-function generateInterviewGuide(stage: any, stageNumber: number): string {
+function generateInterviewGuide(stage: InterviewStage, stageNumber: number): string {
   if (!stage) return "";
   
   const stageNames = ["Screening & Cultural Fit", "Technical & Experience Deep Dive", "Final Assessment & Team Fit"];
@@ -583,7 +583,7 @@ function generateInterviewGuide(stage: any, stageNumber: number): string {
       </div>
       
       <h3>Interview Questions</h3>
-      ${(stage.questions || []).map((q: any, i: number) => `
+      ${(stage.questions || []).map((q: InterviewQuestion, i: number) => `
         <div style="margin: 24px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
           <h4 style="color: #1F4B99;">Question ${i + 1}</h4>
           <p style="font-size: 16px; font-weight: 500; margin: 12px 0;">${q.question}</p>
@@ -610,7 +610,7 @@ function generateInterviewGuide(stage: any, stageNumber: number): string {
             </tr>
           </thead>
           <tbody>
-            ${stage.rubric.map((r: any) => `
+            ${stage.rubric.map((r: RubricRow) => `
               <tr>
                 <td><strong>${r.level} - ${r.label}</strong></td>
                 <td>${r.description}</td>
@@ -633,7 +633,7 @@ function generateInterviewGuide(stage: any, stageNumber: number): string {
   `;
 }
 
-function generateWorkSample(workSample: any): string {
+function generateWorkSample(workSample: WorkSample): string {
   if (!workSample) return "";
   
   return `
@@ -667,7 +667,7 @@ function generateWorkSample(workSample: any): string {
             </tr>
           </thead>
           <tbody>
-            ${workSample.scoring.map((s: any) => `
+            ${workSample.scoring.map((s: ScoringCriteria) => `
               <tr>
                 <td><strong>${s.criteria}</strong></td>
                 <td>${s.weight}%</td>
@@ -691,7 +691,7 @@ function generateWorkSample(workSample: any): string {
   `;
 }
 
-function generateReferenceCheck(referenceCheck: any): string {
+function generateReferenceCheck(referenceCheck: ReferenceCheck): string {
   if (!referenceCheck) return "";
   
   return `
@@ -735,7 +735,7 @@ function generateReferenceCheck(referenceCheck: any): string {
   `;
 }
 
-function generateProcessMap(processMap: any): string {
+function generateProcessMap(processMap: ProcessMap): string {
   if (!processMap) return "";
   
   return `
@@ -748,7 +748,7 @@ function generateProcessMap(processMap: any): string {
       </div>
       
       <h2>Process Steps</h2>
-      ${(processMap.steps || []).map((step: any, i: number) => `
+      ${(processMap.steps || []).map((step: ProcessStep, i: number) => `
         <div style="margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; position: relative;">
           <div style="position: absolute; top: -12px; left: 20px; background: #1F4B99; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
             Step ${i + 1}
@@ -786,7 +786,7 @@ function generateProcessMap(processMap: any): string {
   `;
 }
 
-function generateEEOGuidelines(eeo: any): string {
+function generateEEOGuidelines(eeo: EEOGuidelines): string {
   if (!eeo) return "";
   
   return `

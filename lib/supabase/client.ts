@@ -24,17 +24,17 @@ export async function createAuthenticatedClient() {
         set(name: string, value: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value, ...options });
-          } catch (error) {
+          } catch {
             // Handle cookie setting errors during SSR
-            logger.warn('Failed to set cookie during SSR', { cookieName: name });
+            console.warn('Failed to set cookie during SSR', { cookieName: name });
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: '', ...options });
-          } catch (error) {
+          } catch {
             // Handle cookie removal errors during SSR
-            logger.warn('Failed to remove cookie during SSR', { cookieName: name });
+            console.warn('Failed to remove cookie during SSR', { cookieName: name });
           }
         },
       },

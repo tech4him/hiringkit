@@ -59,6 +59,63 @@ npm run lint         # Run ESLint checks
 # No test framework configured yet - check package.json before assuming
 ```
 
+---
+
+## 🚨 PRODUCTION DEPLOYMENT VERIFICATION (CRITICAL)
+
+**Claude Code MUST follow this checklist before declaring production readiness:**
+
+### ✅ Complete Build Verification
+```bash
+# Run FULL build process - all phases must pass
+npm run build 2>&1 | tee build.log
+
+# Verify success with:
+echo "Build Status: $(grep -q 'Failed to compile' build.log && echo 'FAILED' || echo 'PASSED')"
+
+# Check for compilation errors (not just warnings):
+grep -E "Type error|Failed to compile" build.log
+```
+
+### ✅ TypeScript Strict Checking
+```bash
+# Run TypeScript compiler directly for comprehensive checking
+npx tsc --noEmit --strict
+
+# Check exit code (0 = success, >0 = errors)
+echo "TypeScript Status: $?"
+```
+
+### ❌ NEVER Declare Production Ready If:
+- Any "Failed to compile" messages appear
+- Any "Type error:" messages exist  
+- Build process exits with non-zero code
+- Only saw webpack compilation but not TypeScript checking phase
+
+### 🎯 Issue Classification
+**✅ Acceptable (Warnings - Non-blocking):**
+- ESLint warnings (`Warning: 'variable' is assigned but never used`)
+- Webpack performance warnings
+- Supabase Edge Runtime warnings (known Next.js issue)
+
+**❌ Blocking (Errors - Must Fix):**
+- TypeScript compilation errors (`Type error:`)
+- Build process failures (`Failed to compile`)
+- Missing dependencies or import errors
+
+### 📋 Deployment Readiness Checklist
+Before declaring production readiness:
+- [ ] `npm run build` completes successfully without "Failed to compile"
+- [ ] No "Type error:" messages in build output
+- [ ] All TypeScript compilation errors resolved
+- [ ] Core business functionality tested and working
+- [ ] Build artifacts successfully generated in `.next/`
+
+**Confidence Assessment Rules:**
+- 🔴 **0-4/10**: Build failing, blocking errors present
+- 🟡 **5-7/10**: Build passes but has warnings/technical debt  
+- 🟢 **8-10/10**: Clean build, comprehensive testing, production ready
+
 > **Claude**: If you introduce tests, prefer **Vitest** for unit tests and **@testing-library/react** for components. Add minimal config and update `package.json` scripts.
 
 ---

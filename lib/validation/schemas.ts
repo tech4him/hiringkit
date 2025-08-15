@@ -183,6 +183,6 @@ export type AdminOrdersQuery = z.infer<typeof AdminOrdersQuerySchema>;
 export type ExportRequest = z.infer<typeof ExportRequestSchema>;
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
 export type StripeWebhook = z.infer<typeof StripeWebhookSchema>;
-export type ApiSuccess<T = any> = Omit<z.infer<typeof ApiSuccessSchema>, 'data'> & { data: T };
+export type ApiSuccess<T = unknown> = Omit<z.infer<typeof ApiSuccessSchema>, 'data'> & { data: T };
 export type ApiError = z.infer<typeof ApiErrorSchema>;
-export type ApiResponse<T = any> = ApiSuccess<T> | ApiError;
+export type ApiResponse<T = unknown> = ApiSuccess<T> | ApiError;

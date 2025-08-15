@@ -340,7 +340,7 @@ function InterviewPreview({ interview }: { interview: InterviewStages }) {
       <div className="bg-yellow-50 p-4 rounded-lg">
         <h4 className="font-semibold mb-2">Stages 2 & 3</h4>
         <p className="text-gray-600">Deep-dive technical questions and culture alignment interviews with complete rubrics.</p>
-        <Button variant="outline" size="sm" className="mt-2">
+        <Button variant="secondary" size="sm" className="mt-2">
           <Lock className="h-3 w-3 mr-1" />
           Unlock to View
         </Button>

@@ -1,16 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
-import { createAdminClient } from "@/lib/supabase/client";
+import { NextRequest } from "next/server";
 import { validateRequestBody, createApiResponse, createNextResponse, notFoundResponse } from "@/lib/validation/helpers";
 import { CheckoutRequestSchema } from "@/lib/validation/schemas";
-import { logError, logUserAction } from "@/lib/logger";
-import { safeGetCurrentUser, getOrganizationId } from "@/lib/auth/helpers";
-import { env } from "@/lib/config/env";
 
-const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-02-24.acacia"
-});
+// Ensure this route runs on Node.js, not Edge
+export const runtime = 'nodejs';
+// Prevent static optimization/prerender from trying to execute it at build
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
+const isNode = () => typeof process !== 'undefined' && !!process.versions?.node;
+
+/**
+ * Create a Stripe checkout session for a kit purchase
+ * 
+ * Handles both authenticated and guest user checkout flows:
+ * - For authenticated users: Uses their existing organization
+ * - For guest users: Creates a temporary "Guest Checkout" organization
+ * - Validates that both org_id and user_id are never null before order creation
+ * - Ensures database constraint compliance for the orders table
+ * 
+ * @param request - NextRequest with checkout parameters
+ * @returns Stripe checkout session URL or error response
+ */
 export async function POST(request: NextRequest) {
   try {
     // Validate request body
@@ -20,6 +31,28 @@ export async function POST(request: NextRequest) {
     }
 
     const { kit_id, plan_type, success_url, cancel_url } = validationResult.data;
+
+    // Only import server-only libs inside the handler, after we're on Node
+    if (!isNode()) {
+      return createNextResponse({
+        success: false,
+        error: {
+          code: 'SERVER_REQUIRED',
+          message: 'Server environment required for checkout',
+        },
+      }, 500);
+    }
+
+    // Dynamic imports for server-only functionality
+    const Stripe = (await import("stripe")).default;
+    const { createAdminClient } = await import("@/lib/supabase/client");
+    const { logError, logUserAction } = await import("@/lib/logger");
+    const { safeGetCurrentUser, getOrganizationId } = await import("@/lib/auth/helpers");
+    const { env } = await import("@/lib/config/env");
+
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
+      apiVersion: "2025-02-24.acacia"
+    });
 
     logUserAction('CHECKOUT_SESSION_REQUEST', undefined, {
       kitId: kit_id,
@@ -70,12 +103,19 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    const selectedPlan = pricing[plan_type];
+    const selectedPlan = pricing[plan_type as keyof typeof pricing];
 
     // Get organization ID properly
-    const orgId = await getOrganizationId(request, currentUser);
-    if (!orgId && !currentUser) {
-      // For guest checkout, create a temporary organization
+    let finalOrgId = await getOrganizationId(request, currentUser || undefined);
+    
+    /**
+     * Guest Checkout Organization Creation
+     * 
+     * For users who aren't authenticated, we create a temporary organization
+     * to satisfy database constraints. This organization ID will be used
+     * in the order record to prevent NULL constraint violations.
+     */
+    if (!finalOrgId && !currentUser) {
       const { data: guestOrg, error: orgError } = await supabase
         .from("organizations")
         .insert({
@@ -97,18 +137,96 @@ export async function POST(request: NextRequest) {
           },
         }, 500);
       }
+      
+      finalOrgId = guestOrg.id; // ✅ Use the created guest org ID
+      logUserAction('GUEST_ORG_CREATED', undefined, {
+        kitId: kit_id,
+        guestOrgId: guestOrg.id,
+        guestOrgName: guestOrg.name,
+      });
     }
 
+    // Ensure we always have an org_id - fallback to kit's org_id if available
+    if (!finalOrgId) {
+      finalOrgId = kit.org_id;
+    }
+
+    // Validate that we have a required org_id
+    if (!finalOrgId) {
+      logError(new Error('No organization ID available for checkout'), {
+        context: 'checkout_org_validation',
+        kitId: kit_id,
+        userId: currentUser?.id,
+        kitOrgId: kit.org_id,
+      });
+      return createNextResponse({
+        success: false,
+        error: {
+          code: 'ORG_REQUIRED_ERROR',
+          message: 'Organization required for checkout',
+        },
+      }, 400);
+    }
+
+    // Fix: Ensure user_id is never null
+    const finalUserId = kit.user_id || currentUser?.id;
+    if (!finalUserId) {
+      logError(new Error('No user ID available for checkout'), {
+        context: 'checkout_user_validation',
+        kitId: kit_id,
+        kitUserId: kit.user_id,
+        currentUserId: currentUser?.id,
+      });
+      return createNextResponse({
+        success: false,
+        error: {
+          code: 'USER_REQUIRED_ERROR',
+          message: 'User identification required for checkout',
+        },
+      }, 400);
+    }
+
+    // Validate required fields before proceeding to Stripe
+    const validationErrors = [];
+    if (!kit_id) validationErrors.push('Kit ID required');
+    if (!finalOrgId) validationErrors.push('Organization required');  
+    if (!finalUserId) validationErrors.push('User identification required');
+
+    if (validationErrors.length > 0) {
+      logError(new Error('Checkout validation failed'), {
+        context: 'checkout_validation',
+        errors: validationErrors,
+        kitId: kit_id,
+        orgId: finalOrgId,
+        userId: finalUserId,
+      });
+      return createNextResponse({
+        success: false,
+        error: {
+          code: 'CHECKOUT_VALIDATION_ERROR',
+          message: validationErrors.join(', ')
+        }
+      }, 400);
+    }
+
+    logUserAction('CHECKOUT_VALIDATION_PASSED', currentUser?.id, {
+      kitId: kit_id,
+      finalOrgId,
+      finalUserId,
+      planType: plan_type,
+    });
+
     // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams = {
       payment_method_types: ["card"],
       mode: "payment",
       success_url,
       cancel_url,
       metadata: {
         kit_id,
-        plan_type,
-        user_id: kit.user_id || currentUser?.id || 'guest',
+        plan_type: plan_type as string,
+        user_id: finalUserId, // ✅ Use validated user ID
+        org_id: finalOrgId,   // ✅ Add org ID to metadata for webhooks
       },
       line_items: [
         {
@@ -119,7 +237,7 @@ export async function POST(request: NextRequest) {
               description: selectedPlan.description,
               metadata: {
                 kit_id,
-                plan_type
+                plan_type: plan_type as string
               }
             },
             unit_amount: selectedPlan.amount,
@@ -130,14 +248,17 @@ export async function POST(request: NextRequest) {
       billing_address_collection: "auto",
       allow_promotion_codes: true,
       customer_email: currentUser?.email,
-    });
+    };
 
-    // Create order record
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = await stripe.checkout.sessions.create(sessionParams as any);
+
+    // Create order record with validated IDs
     const { error: orderError } = await supabase
       .from("orders")
       .insert({
-        org_id: orgId || kit.org_id,
-        user_id: kit.user_id || currentUser?.id,
+        org_id: finalOrgId,    // ✅ Always valid - validated above
+        user_id: finalUserId,  // ✅ Always valid - validated above
         kit_id: kit_id,
         status: "awaiting_payment",
         stripe_session_id: session.id,
@@ -185,10 +306,7 @@ export async function POST(request: NextRequest) {
     return createNextResponse(response);
 
   } catch (error) {
-    logError(error as Error, {
-      context: 'checkout_route',
-      path: request.nextUrl.pathname,
-    });
+    console.error('checkout_route error:', error);
     
     return createNextResponse({
       success: false,

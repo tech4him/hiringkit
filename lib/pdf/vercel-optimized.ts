@@ -55,7 +55,7 @@ export async function generateExportForVercel(
           url,
           message: "Generated successfully"
         };
-      } catch (error) {
+      } catch {
         // If direct generation fails, fall back to async
         const jobId = await scheduleAsyncGeneration(kit, exportType);
         return {
@@ -126,6 +126,9 @@ async function processAsyncJob(jobId: string, kit: Kit, exportType: string) {
     await updateJobStatus(jobId, 'processing');
 
     const artifacts = kit.artifacts_json || kit.edited_json;
+    if (!artifacts) {
+      throw new Error('Kit artifacts not found');
+    }
     let resultUrl: string;
 
     if (exportType === "combined_pdf") {
@@ -160,7 +163,7 @@ async function processAsyncJob(jobId: string, kit: Kit, exportType: string) {
 
 async function updateJobStatus(jobId: string, status: string, error?: string) {
   const supabase = createServerClient();
-  const updates: any = { 
+  const updates: { status: string; error_message?: string; completed_at?: string; updated_at?: string } = { 
     status,
     updated_at: new Date().toISOString()
   };

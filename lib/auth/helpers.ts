@@ -1,8 +1,6 @@
 import { NextRequest } from 'next/server';
 import { 
   getCurrentUser, 
-  isAuthenticated, 
-  isCurrentUserAdmin,
   requireAuthentication,
   requireAdminAccess,
   requireOrganizationAccess,
@@ -11,7 +9,6 @@ import {
 import { 
   unauthorizedResponse, 
   forbiddenResponse, 
-  serverErrorResponse 
 } from '@/lib/validation/helpers';
 import { logError } from '@/lib/logger';
 import type { User } from '@/types';
@@ -131,10 +128,10 @@ export function extractUserIdFromUrl(request: NextRequest): string | null {
 }
 
 // Helper to check if request is from authenticated user
-export async function getAuthenticatedUser(request: NextRequest): Promise<User | null> {
+export async function getAuthenticatedUser(): Promise<User | null> {
   try {
     return await getCurrentUser();
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -220,8 +217,17 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   }
 }
 
+// Supabase auth user interface
+interface SupabaseAuthUser {
+  id: string;
+  email: string;
+  user_metadata?: {
+    name?: string;
+  };
+}
+
 // Helper to create or update user from auth
-export async function upsertUserFromAuth(authUser: any): Promise<User | null> {
+export async function upsertUserFromAuth(authUser: SupabaseAuthUser): Promise<User | null> {
   try {
     const { createAuthenticatedClient } = await import('./middleware');
     const supabase = await createAuthenticatedClient();

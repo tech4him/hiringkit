@@ -101,11 +101,6 @@ export async function smartSplitPDF(
   const pageCount = masterPdf.getPageCount();
   const results = new Map<string, Buffer>();
   
-  // Track current section
-  let currentSection: string | null = null;
-  let sectionPages: number[] = [];
-  const sectionMap = new Map<string, number[]>();
-  
   // Scan through pages looking for section markers
   // In a real implementation, we'd look for specific text markers
   // For now, we'll use the simple page-based approach

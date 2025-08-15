@@ -12,7 +12,7 @@ export function createApiResponse<T>(data: T, message?: string): ApiSuccess<T> {
 }
 
 // Helper to create error responses
-export function createApiError(code: string, message: string, details?: any): ApiError {
+export function createApiError(code: string, message: string, details?: unknown): ApiError {
   return {
     success: false,
     error: {
@@ -58,7 +58,7 @@ export async function validateRequestBody<T>(
       success: true,
       data: result.data,
     };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: createApiError(
@@ -89,7 +89,7 @@ export function validateQueryParams<T>(
       success: true,
       data: result.data,
     };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: createApiError(
@@ -117,7 +117,7 @@ export function createErrorResponse(
   code: string,
   message: string,
   status: number = 400,
-  details?: any
+  details?: unknown
 ): NextResponse {
   const error = createApiError(code, message, details);
   return NextResponse.json(error, { status });
@@ -168,7 +168,7 @@ export function safeParseJson<T>(
       success: true,
       data: result.data,
     };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: 'Invalid JSON format',

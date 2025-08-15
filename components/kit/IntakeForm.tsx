@@ -37,8 +37,8 @@ export function IntakeForm({
     onChange({ [field]: items });
   };
 
-  const canExpressGenerate = data.role_title?.trim();
-  const canFullGenerate = data.role_title?.trim() && data.organization?.trim() && data.mission?.trim();
+  const canExpressGenerate = Boolean(data.role_title?.trim());
+  const canFullGenerate = Boolean(data.role_title?.trim() && data.organization?.trim() && data.mission?.trim());
 
   return (
     <div className="h-full flex flex-col">
@@ -48,7 +48,7 @@ export function IntakeForm({
         {/* Mode Toggle */}
         <div className="flex gap-2 mb-6">
           <Button
-            variant={mode === "express" ? "default" : "outline"}
+            variant={mode === "express" ? "default" : "secondary"}
             size="sm"
             onClick={() => setMode("express")}
             className="flex items-center gap-2"
@@ -57,7 +57,7 @@ export function IntakeForm({
             Express Mode
           </Button>
           <Button
-            variant={mode === "detailed" ? "default" : "outline"}
+            variant={mode === "detailed" ? "default" : "secondary"}
             size="sm"
             onClick={() => setMode("detailed")}
             className="flex items-center gap-2"

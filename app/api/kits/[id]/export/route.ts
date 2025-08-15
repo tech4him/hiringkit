@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/client";
-import { generatePDF } from "@/lib/pdf/generator-optimized";
-import { generateExportForVercel } from "@/lib/pdf/vercel-optimized";
+
+// Ensure this route runs on Node.js, not Edge
+export const runtime = 'nodejs';
+// Prevent static optimization/prerender from trying to execute it at build
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const isNode = () => typeof process !== 'undefined' && !!process.versions?.node;
 
 export async function POST(
   request: NextRequest,
@@ -9,6 +14,20 @@ export async function POST(
 ) {
   try {
     const { id: kitId } = await context.params;
+
+    // Only import server-only libs inside the handler, after we're on Node
+    if (!isNode()) {
+      return NextResponse.json(
+        { error: "Server environment required" },
+        { status: 500 }
+      );
+    }
+
+    // Dynamic imports for server-only functionality
+    const { createAdminClient } = await import("@/lib/supabase/client");
+    const { generatePDF } = await import("@/lib/pdf/generator-optimized");
+    const { generateExportForVercel } = await import("@/lib/pdf/vercel-optimized");
+    
     const { export_type = "combined_pdf" } = await request.json();
     
     if (!kitId) {
@@ -41,7 +60,7 @@ export async function POST(
     }
 
     // Check if kit has been paid for
-    const paidOrder = kit.orders?.find((order: any) => 
+    const paidOrder = kit.orders?.find((order: { status: string }) => 
       ["paid", "ready", "delivered"].includes(order.status)
     );
 
@@ -66,11 +85,11 @@ export async function POST(
     }
 
     // Handle async processing for Vercel
-    if (exportResult.jobId) {
+    if ('jobId' in exportResult && exportResult.jobId) {
       return NextResponse.json({
         status: "processing",
         job_id: exportResult.jobId,
-        message: exportResult.message,
+        message: 'message' in exportResult ? exportResult.message : 'Processing export',
         export_type,
         check_url: `/api/jobs/${exportResult.jobId}/status`
       });
@@ -79,8 +98,8 @@ export async function POST(
     // Immediate result (cached or small file)
     if (exportResult.url) {
       // Save export record only if not cached
-      if (exportResult.message !== "Retrieved from cache") {
-        const { data: exportRecord, error: exportError } = await supabase
+      if ('message' in exportResult && exportResult.message !== "Retrieved from cache") {
+        const { data: exportRecord } = await supabase
           .from("exports")
           .insert({
             kit_id: kitId,
@@ -91,8 +110,8 @@ export async function POST(
           .single();
 
         // If it's a ZIP export, save individual asset records
-        if (export_type === "zip" && exportResult.assets && exportRecord) {
-          const assetRecords = exportResult.assets.map((asset: any) => ({
+        if (export_type === "zip" && 'assets' in exportResult && exportResult.assets && Array.isArray(exportResult.assets) && exportRecord) {
+          const assetRecords = (exportResult.assets as { type: string; url: string }[]).map((asset) => ({
             export_id: exportRecord.id,
             artifact: asset.type,
             url: asset.url
@@ -114,8 +133,8 @@ export async function POST(
       return NextResponse.json({
         download_url: exportResult.url,
         export_type,
-        assets: exportResult.assets || null,
-        cached: exportResult.message === "Retrieved from cache"
+        assets: 'assets' in exportResult ? exportResult.assets : null,
+        cached: 'message' in exportResult && exportResult.message === "Retrieved from cache"
       });
     }
 

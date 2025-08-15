@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 import { env, isAdminEmail } from '@/lib/config/env';
 import { logSecurity, logUserAction } from '@/lib/logger';
-import type { User } from '@/types';
+import type { User, Organization } from '@/types';
 
 // Create authenticated Supabase client using cookies
 export async function createAuthenticatedClient() {
@@ -98,7 +98,7 @@ export async function isCurrentUserAdmin(): Promise<boolean> {
 }
 
 // Get user's organization
-export async function getUserOrganization(userId: string): Promise<any | null> {
+export async function getUserOrganization(userId: string): Promise<Organization | null> {
   try {
     const supabase = await createAuthenticatedClient();
     

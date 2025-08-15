@@ -1,10 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/client";
-import { safeRequireAdmin } from "@/lib/auth/helpers";
+import { NextRequest } from "next/server";
 import { createApiResponse, createNextResponse, notFoundResponse } from "@/lib/validation/helpers";
-import { logAdminAction, logError, logUserAction } from "@/lib/logger";
-import { sendApprovalNotificationEmail } from "@/lib/email/resend";
-import { env } from "@/lib/config/env";
+
+// Ensure this route runs on Node.js, not Edge
+export const runtime = 'nodejs';
+// Prevent static optimization/prerender from trying to execute it at build
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const isNode = () => typeof process !== 'undefined' && !!process.versions?.node;
 
 export async function POST(
   request: NextRequest,
@@ -22,6 +25,24 @@ export async function POST(
         },
       }, 400);
     }
+
+    // Only import server-only libs inside the handler, after we're on Node
+    if (!isNode()) {
+      return createNextResponse({
+        success: false,
+        error: {
+          code: 'SERVER_REQUIRED',
+          message: 'Server environment required for admin operations',
+        },
+      }, 500);
+    }
+
+    // Dynamic imports for server-only functionality
+    const { createAdminClient } = await import("@/lib/supabase/client");
+    const { safeRequireAdmin } = await import("@/lib/auth/helpers");
+    const { logAdminAction, logError, logUserAction } = await import("@/lib/logger");
+    const { sendApprovalNotificationEmail } = await import("@/lib/email/resend");
+    const { env } = await import("@/lib/config/env");
 
     // Require admin authentication
     const authResult = await safeRequireAdmin(request);
@@ -205,7 +226,7 @@ export async function POST(
     return createNextResponse(response);
 
   } catch (error) {
-    logError(error as Error, {
+    console.error('kit_approval_route error:', error, {
       context: 'kit_approval_route',
       kitId: (await context.params).id,
       path: request.nextUrl.pathname,

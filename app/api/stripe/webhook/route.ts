@@ -1,19 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
-import { createAdminClient } from "@/lib/supabase/client";
-import { headers } from "next/headers";
-import { logWebhook, logError } from "@/lib/logger";
-import { env } from "@/lib/config/env";
-import { sendOrderConfirmationEmail } from "@/lib/email/resend";
 
-const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-02-24.acacia"
-});
+// Ensure this route runs on Node.js, not Edge
+export const runtime = 'nodejs';
+// Prevent static optimization/prerender from trying to execute it at build
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
+const isNode = () => typeof process !== 'undefined' && !!process.versions?.node;
 
 export async function POST(request: NextRequest) {
   try {
+    // Only import server-only libs inside the handler, after we're on Node
+    if (!isNode()) {
+      return NextResponse.json(
+        { error: "Server environment required" },
+        { status: 500 }
+      );
+    }
+
+    // Dynamic imports for server-only functionality
+    const Stripe = (await import("stripe")).default;
+    const { createAdminClient } = await import("@/lib/supabase/client");
+    const { headers } = await import("next/headers");
+    const { logWebhook, logError } = await import("@/lib/logger");
+    const { env } = await import("@/lib/config/env");
+    const { sendOrderConfirmationEmail } = await import("@/lib/email/resend");
+
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
+      apiVersion: "2025-02-24.acacia",
+      // Disable worker threads - use Node.js single-threaded async
+      httpAgent: undefined,
+      timeout: 60000,
+    });
+
+    const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
+
     const body = await request.text();
     const headersList = await headers();
     const signature = headersList.get("stripe-signature");
@@ -25,7 +46,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let event: Stripe.Event;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let event: any;
 
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
@@ -126,7 +148,7 @@ export async function POST(request: NextRequest) {
 
     try {
       // Process the webhook event
-      await processWebhookEvent(event, supabase);
+      await processWebhookEvent(event, supabase, env, logWebhook, logError, sendOrderConfirmationEmail);
 
       // Mark event as completed
       await supabase
@@ -168,10 +190,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    logError(error as Error, {
-      context: 'webhook_route',
-      path: request.nextUrl.pathname,
-    });
+    console.error('webhook_route error:', error);
     
     return NextResponse.json(
       { error: "Webhook handler failed" },
@@ -181,14 +200,33 @@ export async function POST(request: NextRequest) {
 }
 
 // Separate function to process webhook events
-async function processWebhookEvent(event: Stripe.Event, supabase: any) {
-  switch (event.type) {
+async function processWebhookEvent(
+  event: unknown, 
+  supabase: unknown, 
+  env: unknown, 
+  logWebhook: unknown, 
+  logError: unknown, 
+  sendOrderConfirmationEmail: unknown
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const typedEvent = event as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const typedSupabase = supabase as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const typedEnv = env as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const typedLogWebhook = logWebhook as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const typedLogError = logError as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const typedSendOrderConfirmationEmail = sendOrderConfirmationEmail as any;
+  switch (typedEvent.type) {
     case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
+      const session = typedEvent.data.object;
       
       if (session.payment_status === "paid") {
         // Update order status
-        const { error: orderError } = await supabase
+        const { error: orderError } = await typedSupabase
           .from("orders")
           .update({ 
             status: session.metadata?.plan_type === "pro" ? "qa_pending" : "paid",
@@ -202,7 +240,7 @@ async function processWebhookEvent(event: Stripe.Event, supabase: any) {
 
         // If it's a Pro plan, mark kit for QA
         if (session.metadata?.plan_type === "pro") {
-          const { error: kitError } = await supabase
+          const { error: kitError } = await typedSupabase
             .from("kits")
             .update({ 
               qa_required: true,
@@ -219,7 +257,7 @@ async function processWebhookEvent(event: Stripe.Event, supabase: any) {
         // Send confirmation email
         try {
           // Get order and kit details for email
-          const { data: order } = await supabase
+          const { data: order } = await typedSupabase
             .from("orders")
             .select(`
               *,
@@ -233,7 +271,7 @@ async function processWebhookEvent(event: Stripe.Event, supabase: any) {
             .single();
 
           if (order?.kits && session.customer_details?.email) {
-            const emailResult = await sendOrderConfirmationEmail({
+            const emailResult = await typedSendOrderConfirmationEmail({
               customerEmail: session.customer_details.email,
               customerName: session.customer_details.name || undefined,
               kitTitle: order.kits.title,
@@ -241,12 +279,12 @@ async function processWebhookEvent(event: Stripe.Event, supabase: any) {
               amount: order.total_cents,
               orderNumber: order.id,
               downloadUrl: session.metadata?.plan_type === 'solo' 
-                ? `${env.NEXT_PUBLIC_APP_URL}/kit/${order.kit_id}/success`
+                ? `${typedEnv.NEXT_PUBLIC_APP_URL}/kit/${order.kit_id}/success`
                 : undefined, // Pro plans wait for approval
             });
 
             if (!emailResult.success) {
-              logError(new Error(`Failed to send confirmation email: ${emailResult.error}`), {
+              typedLogError(new Error(`Failed to send confirmation email: ${emailResult.error}`), {
                 context: 'email_confirmation_failed',
                 orderNumber: order.id,
                 customerEmail: session.customer_details.email,
@@ -254,13 +292,13 @@ async function processWebhookEvent(event: Stripe.Event, supabase: any) {
             }
           }
         } catch (emailError) {
-          logError(emailError as Error, {
+          typedLogError(emailError as Error, {
             context: 'email_confirmation_error',
             sessionId: session.id,
           });
         }
 
-        logWebhook('payment_processed', event.id, {
+        typedLogWebhook('payment_processed', typedEvent.id, {
           sessionId: session.id,
           planType: session.metadata?.plan_type,
           kitId: session.metadata?.kit_id,
@@ -270,10 +308,10 @@ async function processWebhookEvent(event: Stripe.Event, supabase: any) {
     }
 
     case "checkout.session.async_payment_succeeded": {
-      const session = event.data.object as Stripe.Checkout.Session;
+      const session = typedEvent.data.object;
       
       // Handle async payment success (e.g., bank transfers)
-      const { error: orderError } = await supabase
+      const { error: orderError } = await typedSupabase
         .from("orders")
         .update({ 
           status: session.metadata?.plan_type === "pro" ? "qa_pending" : "paid",
@@ -288,10 +326,10 @@ async function processWebhookEvent(event: Stripe.Event, supabase: any) {
     }
 
     case "checkout.session.async_payment_failed": {
-      const session = event.data.object as Stripe.Checkout.Session;
+      const session = typedEvent.data.object;
       
       // Handle async payment failure
-      const { error: orderError } = await supabase
+      const { error: orderError } = await typedSupabase
         .from("orders")
         .update({ 
           status: "draft",
@@ -306,9 +344,9 @@ async function processWebhookEvent(event: Stripe.Event, supabase: any) {
     }
 
     default:
-      logWebhook('unhandled_event', event.id, {
-        eventType: event.type,
-        message: `Unhandled event type: ${event.type}`,
+      typedLogWebhook('unhandled_event', typedEvent.id, {
+        eventType: typedEvent.type,
+        message: `Unhandled event type: ${typedEvent.type}`,
       });
   }
 }

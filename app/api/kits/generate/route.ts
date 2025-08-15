@@ -1,11 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/client";
-import { generateKitArtifacts } from "@/lib/ai/generate";
+import { NextRequest } from "next/server";
 import { validateRequestBody, createApiResponse, createNextResponse } from "@/lib/validation/helpers";
 import { GenerateKitRequestSchema } from "@/lib/validation/schemas";
-// Note: Using console for logging to avoid worker thread issues
-import { safeGetCurrentUser } from "@/lib/auth/helpers";
 import type { IntakeData, KitArtifacts } from "@/types";
+
+// Ensure this route runs on Node.js, not Edge
+export const runtime = 'nodejs';
+// Prevent static optimization/prerender from trying to execute it at build
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const isNode = () => typeof process !== 'undefined' && !!process.versions?.node;
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -25,6 +29,22 @@ export async function POST(request: NextRequest) {
       hasOrganization: !!organization,
       hasMission: !!mission,
     });
+
+    // Only import server-only libs inside the handler, after we're on Node
+    if (!isNode()) {
+      return createNextResponse({
+        success: false,
+        error: {
+          code: 'SERVER_REQUIRED',
+          message: 'Server environment required for AI generation',
+        },
+      }, 500);
+    }
+
+    // Dynamic imports for server-only functionality
+    const { createAdminClient } = await import("@/lib/supabase/client");
+    const { generateKitArtifacts } = await import("@/lib/ai/generate");
+    const { safeGetCurrentUser } = await import("@/lib/auth/helpers");
 
     // Get current user (optional for MVP)
     const currentUser = await safeGetCurrentUser();
@@ -94,7 +114,8 @@ export async function POST(request: NextRequest) {
         work_sample_scenario: ""
       };
 
-      artifacts = await generateKitArtifacts(finalIntakeData);
+      const result = await generateKitArtifacts(finalIntakeData);
+      artifacts = result.artifacts;
     }
 
     // Save kit to database
@@ -135,6 +156,7 @@ export async function POST(request: NextRequest) {
       kitId: kit.id,
       expressMode: express_mode,
       roleTitle: role_title,
+      duration,
     });
 
     console.log('Kit generated successfully:', {

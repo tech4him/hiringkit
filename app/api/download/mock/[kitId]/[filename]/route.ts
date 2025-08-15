@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handleMockDownload } from "@/lib/pdf/generator-optimized";
+
+// Ensure this route runs on Node.js, not Edge
+export const runtime = 'nodejs';
+// Prevent static optimization/prerender from trying to execute it at build
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const isNode = () => typeof process !== 'undefined' && !!process.versions?.node;
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +21,17 @@ export async function GET(
         { status: 400 }
       );
     }
+
+    // Only import server-only libs inside the handler, after we're on Node
+    if (!isNode()) {
+      return NextResponse.json(
+        { error: "Server environment required" },
+        { status: 500 }
+      );
+    }
+
+    // Dynamic import for server-only functionality
+    const { handleMockDownload } = await import("@/lib/pdf/generator-optimized");
 
     // For MVP, return mock PDF content
     return await handleMockDownload(kitId, filename);

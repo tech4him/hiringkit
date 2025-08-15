@@ -15,6 +15,12 @@ import {
   Lock
 } from "lucide-react";
 
+interface Kit {
+  id: string;
+  title: string;
+  role_title: string;
+}
+
 export default function CheckoutPage() {
   const params = useParams();
   const router = useRouter();
@@ -22,7 +28,7 @@ export default function CheckoutPage() {
   
   const [selectedPlan, setSelectedPlan] = useState<"solo" | "pro">("solo");
   const [isLoading, setIsLoading] = useState(false);
-  const [kit, setKit] = useState(null);
+  const [kit, setKit] = useState<Kit | null>(null);
 
   useEffect(() => {
     // Load kit details for display

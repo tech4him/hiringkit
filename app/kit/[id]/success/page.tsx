@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,11 +28,7 @@ export default function SuccessPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
 
-  useEffect(() => {
-    checkOrderStatus();
-  }, [kitId]);
-
-  const checkOrderStatus = async () => {
+  const checkOrderStatus = useCallback(async () => {
     try {
       const response = await fetch(`/api/orders/${kitId}/status`);
       if (response.ok) {
@@ -44,7 +40,11 @@ export default function SuccessPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [kitId]);
+
+  useEffect(() => {
+    checkOrderStatus();
+  }, [checkOrderStatus]);
 
   const handleDownload = async (exportType: "combined_pdf" | "zip") => {
     setIsExporting(true);
@@ -167,7 +167,7 @@ export default function SuccessPage() {
                       onClick={() => handleDownload("combined_pdf")}
                       disabled={isExporting}
                       className="flex items-center justify-center gap-2 h-12"
-                      variant="outline"
+                      variant="secondary"
                     >
                       {isExporting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -266,7 +266,7 @@ export default function SuccessPage() {
                 <p className="text-sm text-gray-600">
                   Questions about your hiring kit or need customizations?
                 </p>
-                <Button variant="outline" className="w-full">
+                <Button variant="secondary" className="w-full">
                   Contact Support
                 </Button>
               </CardContent>

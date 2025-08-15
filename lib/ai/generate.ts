@@ -2,8 +2,11 @@ import OpenAI from "openai";
 import type { IntakeData, KitArtifacts } from "@/types";
 import { env } from "@/lib/config/env";
 
+// Configure OpenAI SDK without worker threads - use Node.js defaults
 const openai = new OpenAI({
   apiKey: env.OPENAI_API_KEY,
+  maxRetries: 2,
+  timeout: 60000,
 });
 
 interface GenerateKitOptions extends Partial<IntakeData> {

@@ -1,5 +1,5 @@
 import type { Kit, KitArtifacts } from "@/types";
-import JSZip from "jszip";
+import archiver from "archiver";
 import { generateKitPDF } from "./pdfshift";
 import { smartSplitPDF } from "./splitter";
 import { createServerClient } from "@/lib/supabase/client";
@@ -94,7 +94,7 @@ async function checkCachedExport(kitId: string, exportType: "combined_pdf" | "zi
     const exportRecord = exports[0];
     
     // Verify the file still exists in storage
-    const supabaseStorage = createServerClient();
+    // const supabaseStorage = createServerClient();
     const fileKey = exportRecord.url.split('/').pop();
     
     if (!fileKey) return null;
@@ -104,7 +104,7 @@ async function checkCachedExport(kitId: string, exportType: "combined_pdf" | "zi
     
     return {
       url: exportRecord.url,
-      assets: exportRecord.export_assets?.map((asset: any) => ({
+      assets: exportRecord.export_assets?.map((asset: { artifact: string; url: string }) => ({
         type: asset.artifact,
         url: asset.url
       }))
@@ -124,7 +124,7 @@ async function generateCombinedPDF(kit: Kit, artifacts: KitArtifacts): Promise<s
     const supabase = createServerClient();
     const fileName = `kits/${kit.id}/combined_${Date.now()}.pdf`;
     
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('exports')
       .upload(fileName, pdfBuffer, {
         contentType: 'application/pdf',
@@ -154,7 +154,6 @@ async function generateCombinedPDF(kit: Kit, artifacts: KitArtifacts): Promise<s
 // OPTIMIZED: Generate ONE master PDF, then split locally
 async function generateZipExportOptimized(kit: Kit, artifacts: KitArtifacts): Promise<{ url: string; assets: Array<{ type: string; url: string }> }> {
   try {
-    const zip = new JSZip();
     const supabase = createServerClient();
     const assets: Array<{ type: string; url: string }> = [];
     
@@ -180,13 +179,25 @@ async function generateZipExportOptimized(kit: Kit, artifacts: KitArtifacts): Pr
 
     console.log(`📄 Processing ${splitPdfs.size} split PDFs...`);
     
+    // Create ZIP using archiver
+    const zip = archiver('zip', { zlib: { level: 9 } });
+    const zipChunks: Buffer[] = [];
+    
+    // Collect ZIP data
+    zip.on('data', (chunk: Buffer) => zipChunks.push(chunk));
+    
+    const zipPromise = new Promise<Buffer>((resolve, reject) => {
+      zip.on('end', () => resolve(Buffer.concat(zipChunks)));
+      zip.on('error', reject);
+    });
+    
     // Add each split PDF to the ZIP and upload to storage
     for (const [type, pdfBuffer] of splitPdfs) {
       const fileName = sectionNames[type as keyof typeof sectionNames] || `${type}.pdf`;
       
       try {
         // Add to ZIP
-        zip.file(fileName, pdfBuffer);
+        zip.append(pdfBuffer, { name: fileName });
         
         // Upload individual PDF to storage for potential individual downloads
         const storageFileName = `kits/${kit.id}/${type}_${Date.now()}.pdf`;
@@ -207,12 +218,12 @@ async function generateZipExportOptimized(kit: Kit, artifacts: KitArtifacts): Pr
         console.error(`Error processing ${type}:`, error);
         // Add mock PDF for failed sections
         const mockPdf = generateMockPdfContent(kit.id, type);
-        zip.file(fileName, mockPdf);
+        zip.append(mockPdf, { name: fileName });
       }
     }
 
     // Add README with credit savings info
-    zip.file("README.txt", `Hiring Kit for ${kit.title || 'Untitled Kit'}
+    const readmeContent = `Hiring Kit for ${kit.title || 'Untitled Kit'}
 Generated: ${new Date().toISOString()}
 
 This ZIP contains all documents for your hiring kit.
@@ -229,10 +240,13 @@ Documents included:
 - EEO Guidelines
 
 💰 Credits Used: 1 PDFShift credit (optimized from 9+ credits)
-⚡ Generated using master PDF splitting for efficiency`);
+⚡ Generated using master PDF splitting for efficiency`;
+    
+    zip.append(readmeContent, { name: 'README.txt' });
 
     console.log("📦 Creating ZIP archive...");
-    const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+    zip.finalize();
+    const zipBuffer = await zipPromise;
     
     // Upload ZIP to storage
     const zipFileName = `kits/${kit.id}/complete_kit_${Date.now()}.zip`;
@@ -347,8 +361,17 @@ export async function handleMockDownload(kitId: string, filename: string): Promi
   const isZip = filename.includes("zip");
   
   if (isZip) {
-    // Create a proper ZIP file using JSZip
-    const zip = new JSZip();
+    // Create a proper ZIP file using archiver
+    const zip = archiver('zip', { zlib: { level: 9 } });
+    const zipChunks: Buffer[] = [];
+    
+    // Collect ZIP data
+    zip.on('data', (chunk: Buffer) => zipChunks.push(chunk));
+    
+    const zipPromise = new Promise<Buffer>((resolve, reject) => {
+      zip.on('end', () => resolve(Buffer.concat(zipChunks)));
+      zip.on('error', reject);
+    });
     
     // Add mock PDF files to the ZIP
     const documents = [
@@ -409,11 +432,11 @@ startxref
 692
 %%EOF`;
       
-      zip.file(docName, mockPdfContent);
+      zip.append(mockPdfContent, { name: docName });
     });
     
     // Add a README
-    zip.file("README.txt", `Hiring Kit Export
+    const readmeContent = `Hiring Kit Export
 Kit ID: ${kitId}
 Generated: ${new Date().toISOString()}
 
@@ -430,12 +453,15 @@ Documents included:
 - Work Sample Assignment
 - Reference Check Script
 - Process Map
-- EEO Guidelines`);
+- EEO Guidelines`;
+    
+    zip.append(readmeContent, { name: 'README.txt' });
     
     // Generate the ZIP file
-    const zipContent = await zip.generateAsync({ type: "nodebuffer" });
+    zip.finalize();
+    const zipContent = await zipPromise;
     
-    return new Response(zipContent, {
+    return new Response(zipContent as BodyInit, {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${filename}"`,

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { IntakeForm } from "@/components/kit/IntakeForm";
 import { KitPreview } from "@/components/kit/KitPreview";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { IntakeData, Kit, KitArtifacts } from "@/types";
 
-export default function KitPage() {
+// Component that uses useSearchParams - must be wrapped in Suspense
+function KitPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roleFromUrl = searchParams.get("role");
@@ -169,5 +170,21 @@ export default function KitPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main component with Suspense boundary wrapper
+export default function KitPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading kit builder...</p>
+        </div>
+      </div>
+    }>
+      <KitPageContent />
+    </Suspense>
   );
 }
