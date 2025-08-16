@@ -461,7 +461,10 @@ Additional language skills"
       {/* Current Section */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-6">
-          <sections[currentStep].icon className="h-6 w-6 text-[#1F4B99]" />
+          {(() => {
+            const IconComponent = sections[currentStep].icon;
+            return <IconComponent className="h-6 w-6 text-[#1F4B99]" />;
+          })()}
           <div>
             <h2 className="text-xl font-semibold">{sections[currentStep].name}</h2>
             <p className="text-gray-600 text-sm">{sections[currentStep].description}</p>
