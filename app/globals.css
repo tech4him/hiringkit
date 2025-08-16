@@ -3,59 +3,61 @@
 @tailwind utilities;
 
 :root {
-  /* Brand Colors from PRD */
-  --brand-primary: #1F4B99;
-  --brand-accent: #39B3A6;
-  --brand-neutral: #F7F8FA;
+  /* =================================================================
+   * SINGLE CONSISTENT LIGHT THEME - NO DARK MODE
+   * All colors optimized for WCAG AA compliance and legibility
+   * =================================================================
+   */
   
-  /* Semantic Colors - HSL for better manipulation */
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: 225 69% 35%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 98%;
-  --secondary-foreground: 222.2 84% 4.9%;
-  --muted: 210 40% 98%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 172 49% 46%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 225 69% 35%;
+  /* Brand Colors from PRD */
+  --brand-primary: #1F4B99;  /* Main brand blue */
+  --brand-accent: #39B3A6;   /* Teal accent */
+  --brand-neutral: #F7F8FA;  /* Light gray background */
+  
+  /* Core Theme Colors (HSL for manipulation) */
+  --background: 0 0% 100%;               /* White #FFFFFF */
+  --foreground: 0 0% 13%;                /* Dark gray #212121 for text */
+  
+  /* Cards & Surfaces */
+  --card: 0 0% 100%;                     /* White cards */
+  --card-foreground: 0 0% 13%;           /* Dark text on cards */
+  
+  /* Popovers & Dropdowns */
+  --popover: 0 0% 100%;                  /* White popovers */
+  --popover-foreground: 0 0% 13%;        /* Dark text */
+  
+  /* Primary Actions (Brand Blue) */
+  --primary: 217 71% 36%;                /* #1F4B99 brand blue */
+  --primary-foreground: 0 0% 100%;       /* White text on primary */
+  
+  /* Secondary Actions (Light Gray) */
+  --secondary: 240 5% 96%;               /* #F4F4F5 light gray */
+  --secondary-foreground: 0 0% 13%;      /* Dark text on secondary */
+  
+  /* Muted Elements */
+  --muted: 240 5% 96%;                   /* #F4F4F5 muted backgrounds */
+  --muted-foreground: 0 0% 40%;          /* #666666 muted text */
+  
+  /* Accent (Brand Teal) */
+  --accent: 172 49% 46%;                 /* #39B3A6 brand teal */
+  --accent-foreground: 0 0% 100%;        /* White text on accent */
+  
+  /* Destructive/Error States */
+  --destructive: 0 72% 51%;              /* #DC2626 red */
+  --destructive-foreground: 0 0% 100%;   /* White text */
+  
+  /* Borders & Inputs */
+  --border: 0 0% 89%;                    /* #E4E4E7 light gray border */
+  --input: 0 0% 89%;                     /* Same as border */
+  
+  /* Focus Ring */
+  --ring: 217 71% 36%;                   /* Brand blue for focus states */
   
   /* Spacing */
-  --radius: 0.75rem;
+  --radius: 0.5rem;                       /* Consistent border radius */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 220 13% 18%;            /* Lighter dark card for better visibility */
-    --card-foreground: 210 40% 98%;
-    --popover: 220 13% 18%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 225 69% 35%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 172 49% 46%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 25%;      /* Lighter border for better visibility */
-    --input: 217.2 32.6% 25%;       /* Lighter input for better visibility */
-    --ring: 225 69% 35%;
-  }
-}
+/* Dark mode removed - single consistent light theme only */
 
 * {
   box-sizing: border-box;
@@ -94,25 +96,12 @@ a {
   }
 }
 
-/* Admin Theme - WCAG AA Compliant */
+/* Admin Theme - Slight adjustments for admin context */
 .admin-theme {
-  /* Light theme with proper contrast ratios */
-  --background: 0 0% 98%;           /* #FAFAFA - Light gray background */
-  --foreground: 0 0% 9%;            /* #171717 - Almost black text (contrast 15.3:1) */
-  --card: 0 0% 100%;                /* White cards */
-  --card-foreground: 0 0% 9%;       /* Dark text on cards */
-  --primary: 225 69% 35%;           /* Keep brand blue */
-  --primary-foreground: 0 0% 100%;  /* White on primary */
-  --secondary: 240 5% 96%;          /* Very light gray */
-  --secondary-foreground: 0 0% 9%;  /* Dark text */
-  --muted: 240 5% 96%;              /* Match secondary */
-  --muted-foreground: 0 0% 40%;     /* Medium gray text (contrast 7.4:1) */
-  --accent: 172 49% 46%;            /* Keep brand teal */
-  --accent-foreground: 0 0% 100%;   /* White on accent */
-  --border: 0 0% 89%;               /* Light border */
-  --input: 0 0% 89%;                /* Match border */
-  --ring: 225 69% 35%;              /* Focus ring matches primary */
+  /* Admin uses slightly different background for visual separation */
+  --background: 0 0% 98%;           /* #FAFAFA - Slightly gray background */
   
+  /* All other colors inherit from root for consistency */
   /* Table specific variables */
   --table-header-bg: 240 5% 96%;
   --table-row-hover: 240 5% 98%;
@@ -197,56 +186,4 @@ a {
   }
 }
 
-/* Kit Builder Specific Fixes - Always light theme */
-.kit-builder-page {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: 225 69% 35%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 98%;
-  --secondary-foreground: 222.2 84% 4.9%;
-  --muted: 210 40% 98%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 172 49% 46%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 225 69% 35%;
-}
-
-/* Ensure cards in kit builder are always white */
-.kit-builder-page .rounded-lg.border,
-.kit-builder-page [data-card] {
-  background: white !important;
-  color: rgb(15 23 42) !important;
-}
-
-.kit-builder-page .text-gray-600,
-.kit-builder-page .text-gray-500,
-.kit-builder-page .text-sm {
-  color: rgb(71 85 105) !important;
-}
-
-/* Fix for the unlock section */
-.kit-builder-page .border-\[\#1F4B99\].bg-blue-50 {
-  background: rgb(239 246 255) !important;
-  border-color: #1F4B99 !important;
-}
-
-.kit-builder-page .border-\[\#1F4B99\].bg-blue-50 h3 {
-  color: rgb(15 23 42) !important;
-}
-
-.kit-builder-page .border-\[\#1F4B99\].bg-blue-50 p {
-  color: rgb(71 85 105) !important;
-}
-
-.kit-builder-page .border-\[\#1F4B99\].bg-blue-50 .flex.items-center {
-  color: rgb(30 41 59) !important;
-}
+/* Kit builder no longer needs specific overrides with consistent theme */
