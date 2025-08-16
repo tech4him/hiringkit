@@ -37,9 +37,9 @@
   :root {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 220 13% 18%;            /* Lighter dark card for better visibility */
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 220 13% 18%;
     --popover-foreground: 210 40% 98%;
     --primary: 225 69% 35%;
     --primary-foreground: 210 40% 98%;
@@ -51,8 +51,8 @@
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 217.2 32.6% 25%;      /* Lighter border for better visibility */
+    --input: 217.2 32.6% 25%;       /* Lighter input for better visibility */
     --ring: 225 69% 35%;
   }
 }
@@ -195,4 +195,58 @@ a {
   .admin-table tbody td {
     @apply px-2 py-2;
   }
+}
+
+/* Kit Builder Specific Fixes - Always light theme */
+.kit-builder-page {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 225 69% 35%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 98%;
+  --secondary-foreground: 222.2 84% 4.9%;
+  --muted: 210 40% 98%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 172 49% 46%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 225 69% 35%;
+}
+
+/* Ensure cards in kit builder are always white */
+.kit-builder-page .rounded-lg.border,
+.kit-builder-page [data-card] {
+  background: white !important;
+  color: rgb(15 23 42) !important;
+}
+
+.kit-builder-page .text-gray-600,
+.kit-builder-page .text-gray-500,
+.kit-builder-page .text-sm {
+  color: rgb(71 85 105) !important;
+}
+
+/* Fix for the unlock section */
+.kit-builder-page .border-\[\#1F4B99\].bg-blue-50 {
+  background: rgb(239 246 255) !important;
+  border-color: #1F4B99 !important;
+}
+
+.kit-builder-page .border-\[\#1F4B99\].bg-blue-50 h3 {
+  color: rgb(15 23 42) !important;
+}
+
+.kit-builder-page .border-\[\#1F4B99\].bg-blue-50 p {
+  color: rgb(71 85 105) !important;
+}
+
+.kit-builder-page .border-\[\#1F4B99\].bg-blue-50 .flex.items-center {
+  color: rgb(30 41 59) !important;
 }
