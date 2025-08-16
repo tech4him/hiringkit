@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import {
   FileText,
   Calendar
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { User } from "@/types";
 
 // TypeScript interfaces for admin data
@@ -50,6 +52,7 @@ export function AdminDashboard({ initialOrders, user }: AdminDashboardProps) {
   const [orders, setOrders] = useState<AdminOrder[]>(initialOrders);
   const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState<FilterStatus>("qa_pending");
+  const router = useRouter();
 
   const loadOrders = useCallback(async () => {
     setIsLoading(true);
@@ -86,18 +89,48 @@ export function AdminDashboard({ initialOrders, user }: AdminDashboardProps) {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "qa_pending":
-        return <Badge variant="secondary" className="bg-orange-100 text-orange-800"><Clock className="h-3 w-3 mr-1" />Pending Review</Badge>;
-      case "ready":
-        return <Badge variant="secondary" className="bg-green-100 text-green-800"><CheckCircle className="h-3 w-3 mr-1" />Ready</Badge>;
-      case "paid":
-        return <Badge variant="secondary" className="bg-blue-100 text-blue-800"><DollarSign className="h-3 w-3 mr-1" />Paid</Badge>;
-      case "delivered":
-        return <Badge variant="secondary" className="bg-gray-100 text-gray-800"><CheckCircle className="h-3 w-3 mr-1" />Delivered</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
+    const badgeConfig = {
+      qa_pending: {
+        icon: Clock,
+        label: "Pending Review",
+        className: "admin-badge-pending border"
+      },
+      ready: {
+        icon: CheckCircle,
+        label: "Ready",
+        className: "admin-badge-ready border"
+      },
+      paid: {
+        icon: DollarSign,
+        label: "Paid",
+        className: "admin-badge-paid border"
+      },
+      delivered: {
+        icon: CheckCircle,
+        label: "Delivered",
+        className: "admin-badge-delivered border"
+      },
+      awaiting_payment: {
+        icon: Clock,
+        label: "Awaiting Payment",
+        className: "admin-badge-awaiting border"
+      }
+    };
+
+    const config = badgeConfig[status as keyof typeof badgeConfig];
+    
+    if (!config) {
+      return <Badge variant="secondary" className="border">{status}</Badge>;
     }
+
+    const IconComponent = config.icon;
+    
+    return (
+      <Badge className={cn(config.className)}>
+        <IconComponent className="h-3 w-3 mr-1" />
+        {config.label}
+      </Badge>
+    );
   };
 
   const getPlanType = (totalCents: number) => {
@@ -223,36 +256,36 @@ export function AdminDashboard({ initialOrders, user }: AdminDashboardProps) {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="admin-table">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4">Kit</th>
-                      <th className="text-left py-3 px-4">Plan</th>
-                      <th className="text-left py-3 px-4">Status</th>
-                      <th className="text-left py-3 px-4">Customer</th>
-                      <th className="text-left py-3 px-4">Amount</th>
-                      <th className="text-left py-3 px-4">Date</th>
-                      <th className="text-left py-3 px-4">Actions</th>
+                    <tr>
+                      <th>Kit</th>
+                      <th>Plan</th>
+                      <th>Status</th>
+                      <th>Customer</th>
+                      <th>Amount</th>
+                      <th>Date</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredOrders.map((order) => (
-                      <tr key={order.id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4">
+                      <tr key={order.id}>
+                        <td>
                           <div>
                             <p className="font-medium">{order.kits?.title || "Hiring Kit"}</p>
                             <p className="text-sm text-gray-600">ID: {order.kit_id ? order.kit_id.slice(0, 8) : 'N/A'}...</p>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td>
                           <Badge variant="secondary">
                             {getPlanType(order.total_cents)}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4">
+                        <td>
                           {getStatusBadge(order.status)}
                         </td>
-                        <td className="py-3 px-4">
+                        <td>
                           <div className="flex items-center gap-2">
                             <UserIcon className="h-4 w-4 text-gray-400" />
                             <span className="text-sm">
@@ -260,10 +293,10 @@ export function AdminDashboard({ initialOrders, user }: AdminDashboardProps) {
                             </span>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td>
                           <span className="font-medium">${(order.total_cents / 100).toFixed(0)}</span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td>
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-gray-400" />
                             <span className="text-sm">
@@ -271,15 +304,16 @@ export function AdminDashboard({ initialOrders, user }: AdminDashboardProps) {
                             </span>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td>
                           <div className="flex items-center gap-2">
                             <Button
                               variant="secondary"
                               size="sm"
-                              onClick={() => window.open(`/kit/${order.kit_id}`, '_blank')}
+                              onClick={() => router.push(`/admin/orders/${order.id}`)}
+                              disabled={!order.id}
                             >
                               <Eye className="h-3 w-3 mr-1" />
-                              View
+                              View Details
                             </Button>
                             {order.status === "qa_pending" && (
                               <Button
