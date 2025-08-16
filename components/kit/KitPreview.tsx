@@ -195,7 +195,7 @@ export function KitPreview({
                   ZIP with separate PDFs
                 </div>
               </div>
-              <Button onClick={onUnlock} size="lg" className="bg-[#1F4B99] hover:brightness-110">
+              <Button onClick={onUnlock} size="lg" className="bg-[#1F4B99] text-white hover:brightness-110">
                 <Download className="h-4 w-4 mr-2" />
                 Unlock Full Kit - $49
               </Button>

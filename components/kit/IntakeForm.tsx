@@ -157,7 +157,7 @@ function ExpressMode({
         <Button
           onClick={onGenerate}
           disabled={!canGenerate || isGenerating}
-          className="w-full bg-[#1F4B99] hover:brightness-110"
+          className="w-full bg-[#1F4B99] text-white hover:brightness-110"
           size="lg"
         >
           {isGenerating ? (
@@ -347,7 +347,7 @@ Additional language skills"
       <Button
         onClick={onGenerate}
         disabled={!canGenerate || isGenerating}
-        className="w-full bg-[#1F4B99] hover:brightness-110"
+        className="w-full bg-[#1F4B99] text-white hover:brightness-110"
         size="lg"
       >
         {isGenerating ? (

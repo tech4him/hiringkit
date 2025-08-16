@@ -244,7 +244,7 @@ export default function SuccessPage() {
                     <Button
                       onClick={() => handleDownload("zip")}
                       disabled={isExporting}
-                      className="flex items-center justify-center gap-2 h-12 bg-[#1F4B99] hover:brightness-110"
+                      className="flex items-center justify-center gap-2 h-12 bg-[#1F4B99] text-white hover:brightness-110"
                     >
                       {isExporting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -347,7 +347,7 @@ export default function SuccessPage() {
                 </p>
                 <Button 
                   onClick={() => window.location.href = "/"}
-                  className="w-full bg-[#1F4B99] hover:brightness-110"
+                  className="w-full bg-[#1F4B99] text-white hover:brightness-110"
                 >
                   Create New Kit
                 </Button>

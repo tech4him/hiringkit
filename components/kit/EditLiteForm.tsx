@@ -305,7 +305,7 @@ Additional language skills"
               </p>
               <Button 
                 size="lg" 
-                className="bg-[#1F4B99] hover:brightness-110"
+                className="bg-[#1F4B99] text-white hover:brightness-110"
                 onClick={onUnlock}
               >
                 Unlock Full Kit - $49

@@ -365,7 +365,7 @@ export default function CheckoutPage() {
                 <Button
                   onClick={handleCheckout}
                   disabled={isLoading}
-                  className="w-full bg-[#1F4B99] hover:brightness-110 h-12 text-base font-semibold"
+                  className="w-full bg-[#1F4B99] text-white hover:brightness-110 h-12 text-base font-semibold"
                 >
                   {isLoading ? (
                     <>

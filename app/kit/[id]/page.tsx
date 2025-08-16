@@ -147,7 +147,7 @@ export default function KitDetailPage() {
                     }
                     router.push(`/kit/${kitId}/checkout`);
                   }}
-                  className="flex items-center gap-2 h-12 bg-[#1F4B99] hover:brightness-110"
+                  className="flex items-center gap-2 h-12 bg-[#1F4B99] text-white hover:brightness-110"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   Purchase Kit

@@ -458,7 +458,7 @@ export default function Home() {
                 </li>
               </ul>
               
-              <Button className="w-full rounded-2xl bg-[#1F4B99] hover:brightness-110 py-3">
+              <Button className="w-full rounded-2xl bg-[#1F4B99] text-white hover:brightness-110 py-3">
                 Start Free Preview
               </Button>
             </div>
@@ -489,7 +489,7 @@ export default function Home() {
                 </li>
               </ul>
               
-              <Button className="w-full rounded-2xl bg-[#1F4B99] hover:brightness-110 py-3">
+              <Button className="w-full rounded-2xl bg-[#1F4B99] text-white hover:brightness-110 py-3">
                 Start Free Preview
               </Button>
             </div>
