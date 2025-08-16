@@ -1,13 +1,14 @@
 import { NextRequest } from "next/server";
 import { createApiResponse, createNextResponse, notFoundResponse } from "@/lib/validation/helpers";
+import { requireAdminAPI } from "@/lib/auth/requireAdmin";
+import { withContext, logSecurity } from "@/lib/logger";
+import { env } from "@/lib/config/env";
 
 // Ensure this route runs on Node.js, not Edge
 export const runtime = 'nodejs';
 // Prevent static optimization/prerender from trying to execute it at build
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const isNode = () => typeof process !== 'undefined' && !!process.versions?.node;
 
 export async function POST(
   request: NextRequest,
@@ -26,37 +27,25 @@ export async function POST(
       }, 400);
     }
 
-    // Only import server-only libs inside the handler, after we're on Node
-    if (!isNode()) {
-      return createNextResponse({
-        success: false,
-        error: {
-          code: 'SERVER_REQUIRED',
-          message: 'Server environment required for admin operations',
-        },
-      }, 500);
-    }
-
-    // Dynamic imports for server-only functionality
-    const { createAdminClient } = await import("@/lib/supabase/client");
-    const { safeRequireAdmin } = await import("@/lib/auth/helpers");
-    const { logAdminAction, logError, logUserAction } = await import("@/lib/logger");
-    const { sendApprovalNotificationEmail } = await import("@/lib/email/resend");
-    const { env } = await import("@/lib/config/env");
-
     // Require admin authentication
-    const authResult = await safeRequireAdmin(request);
-    if (!authResult.success) {
-      return authResult.response;
-    }
+    const { supabase, user } = await requireAdminAPI();
 
-    const { user } = authResult;
-    logUserAction('ADMIN_KIT_APPROVAL_REQUEST', user.id, { 
-      userEmail: user.email,
-      kitId,
+    const log = withContext({ 
+      userId: user.id, 
+      userEmail: user.email, 
+      route: '/api/admin/kits/approve',
+      kitId 
     });
 
-    const supabase = createAdminClient();
+    log.info('ADMIN_KIT_APPROVAL_REQUEST', { kitId });
+
+    // Log admin action for audit trail
+    logSecurity('ADMIN_KIT_APPROVAL_ATTEMPT', {
+      userId: user.id,
+      userEmail: user.email,
+      action: 'approve_kit',
+      kitId,
+    });
 
     // First, verify the kit exists and is in a state that can be approved
     const { data: kit, error: kitCheckError } = await supabase
@@ -66,10 +55,9 @@ export async function POST(
       .single();
 
     if (kitCheckError || !kit) {
-      logError(new Error('Kit not found'), {
-        context: 'kit_approval_check',
+      log.error('Kit not found for approval', {
+        error: kitCheckError?.message,
         kitId,
-        adminId: user.id,
       });
       return notFoundResponse('Kit not found');
     }
@@ -98,10 +86,10 @@ export async function POST(
       .single();
 
     if (kitError) {
-      logError(new Error(kitError.message), {
-        context: 'kit_approval_update',
+      log.error('Failed to update kit status', {
+        error: kitError.message,
+        code: kitError.code,
         kitId,
-        adminId: user.id,
       });
       
       return createNextResponse({
@@ -124,10 +112,10 @@ export async function POST(
       .eq("status", "qa_pending");
 
     if (orderError) {
-      logError(new Error(orderError.message), {
-        context: 'order_approval_update',
+      log.error('Failed to update order status', {
+        error: orderError.message,
+        code: orderError.code,
         kitId,
-        adminId: user.id,
       });
       
       // Try to revert kit status on order update failure
@@ -148,8 +136,11 @@ export async function POST(
       }, 500);
     }
 
-    // Log admin action for audit trail
-    logAdminAction('KIT_APPROVED', user.email, {
+    // Log successful approval action
+    logSecurity('ADMIN_KIT_APPROVED', {
+      userId: user.id,
+      userEmail: user.email,
+      action: 'kit_approved',
       kitId,
       kitTitle: kit.title,
       kitUserId: kit.user_id,
@@ -160,18 +151,23 @@ export async function POST(
       .from("audit_logs")
       .insert({
         actor_id: user.id,
-        kit_id: kitId,
+        resource_type: 'kit',
+        resource_id: kitId,
         action: "kit_approved",
-        payload_json: {
+        old_values: { status: kit.status, qa_required: true },
+        new_values: { status: "published", qa_required: false },
+        metadata: {
           kitTitle: kit.title,
-          previousStatus: kit.status,
-          newStatus: "published",
+          kitUserId: kit.user_id,
           adminEmail: user.email,
         },
       });
 
     // Send notification email to user that their kit is ready
     try {
+      // Dynamic import for email function
+      const { sendApprovalNotificationEmail } = await import("@/lib/email/resend");
+      
       // Get user and order details for email
       const { data: userAndOrder } = await supabase
         .from("orders")
@@ -199,21 +195,23 @@ export async function POST(
         });
 
         if (!emailResult.success) {
-          logError(new Error(`Failed to send approval email: ${emailResult.error}`), {
-            context: 'approval_email_failed',
-            kitId,
+          log.error('Failed to send approval email', {
+            error: emailResult.error,
+            customerEmail: userAndOrder.users.email,
+          });
+        } else {
+          log.info('Approval notification email sent', {
             customerEmail: userAndOrder.users.email,
           });
         }
       }
     } catch (emailError) {
-      logError(emailError as Error, {
-        context: 'approval_email_error',
-        kitId,
+      log.error('Error sending approval email', {
+        error: emailError instanceof Error ? emailError.message : emailError,
       });
     }
 
-    logAdminAction('KIT_APPROVED_SUCCESS', user.email, {
+    log.info('Kit approval completed successfully', {
       kitId,
       kitTitle: kit.title,
     });
@@ -226,8 +224,32 @@ export async function POST(
     return createNextResponse(response);
 
   } catch (error) {
-    console.error('kit_approval_route error:', error, {
-      context: 'kit_approval_route',
+    // Handle authentication errors specifically
+    if (error instanceof Error) {
+      if (error.message === 'UNAUTHORIZED') {
+        return createNextResponse({
+          success: false,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Authentication required',
+          },
+        }, 401);
+      }
+      
+      if (error.message === 'FORBIDDEN') {
+        return createNextResponse({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Admin access required',
+          },
+        }, 403);
+      }
+    }
+
+    const log = withContext({ route: '/api/admin/kits/approve' });
+    log.error('Kit approval route error', { 
+      error: error instanceof Error ? error.message : error,
       kitId: (await context.params).id,
       path: request.nextUrl.pathname,
     });

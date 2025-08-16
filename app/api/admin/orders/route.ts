@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 import { validateQueryParams, createApiResponse, createNextResponse } from "@/lib/validation/helpers";
 import { AdminOrdersQuerySchema } from "@/lib/validation/schemas";
+import { requireAdminAPI } from "@/lib/auth/requireAdmin";
+import { withContext, logSecurity } from "@/lib/logger";
 
 // Ensure this route runs on Node.js, not Edge
 export const runtime = 'nodejs';
 // Prevent static optimization/prerender from trying to execute it at build
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const isNode = () => typeof process !== 'undefined' && !!process.versions?.node;
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,37 +21,29 @@ export async function GET(request: NextRequest) {
 
     const { page = 1, limit = 20, status, org_id } = validationResult.data;
 
-    // Only import server-only libs inside the handler, after we're on Node
-    if (!isNode()) {
-      return createNextResponse({
-        success: false,
-        error: {
-          code: 'SERVER_REQUIRED',
-          message: 'Server environment required for admin operations',
-        },
-      }, 500);
-    }
-
-    // Dynamic imports for server-only functionality
-    const { createAdminClient } = await import("@/lib/supabase/client");
-    const { safeRequireAdmin } = await import("@/lib/auth/helpers");
-
     // Require admin authentication
-    const authResult = await safeRequireAdmin(request);
-    if (!authResult.success) {
-      return authResult.response;
-    }
+    const { supabase, user } = await requireAdminAPI();
 
-    const { user } = authResult;
-    console.log('ORDERS_LIST_REQUEST:', {
-      userEmail: user.email,
+    const log = withContext({ 
+      userId: user.id, 
+      userEmail: user.email, 
+      route: '/api/admin/orders' 
+    });
+
+    log.info('ADMIN_ORDERS_LIST_REQUEST', {
       page,
       limit,
       status,
       orgId: org_id,
     });
 
-    const supabase = createAdminClient();
+    // Log admin action for audit trail
+    logSecurity('ADMIN_ORDERS_ACCESS', {
+      userId: user.id,
+      userEmail: user.email,
+      action: 'list_orders',
+      filters: { status, org_id, page, limit },
+    });
 
     // Build query with filters
     let query = supabase
@@ -91,9 +83,9 @@ export async function GET(request: NextRequest) {
     const { data: orders, error: ordersError, count } = await query;
 
     if (ordersError) {
-      console.error('admin_orders_fetch error:', ordersError.message, {
-        context: 'admin_orders_fetch',
-        userId: user.id,
+      log.error('Failed to fetch orders', {
+        error: ordersError.message,
+        code: ordersError.code,
         page,
         limit,
       });
@@ -109,6 +101,13 @@ export async function GET(request: NextRequest) {
 
     const totalPages = Math.ceil((count || 0) / limit);
 
+    log.info('ADMIN_ORDERS_LIST_SUCCESS', {
+      ordersCount: orders?.length || 0,
+      totalRecords: count || 0,
+      page,
+      totalPages,
+    });
+
     const response = createApiResponse({
       orders: orders || [],
       pagination: {
@@ -122,7 +121,31 @@ export async function GET(request: NextRequest) {
     return createNextResponse(response);
 
   } catch (error) {
-    console.error('admin_orders_route error:', error);
+    // Handle authentication errors specifically
+    if (error instanceof Error) {
+      if (error.message === 'UNAUTHORIZED') {
+        return createNextResponse({
+          success: false,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Authentication required',
+          },
+        }, 401);
+      }
+      
+      if (error.message === 'FORBIDDEN') {
+        return createNextResponse({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Admin access required',
+          },
+        }, 403);
+      }
+    }
+
+    const log = withContext({ route: '/api/admin/orders' });
+    log.error('Admin orders route error', { error: error instanceof Error ? error.message : error });
     
     return createNextResponse({
       success: false,

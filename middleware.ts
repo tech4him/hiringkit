@@ -182,6 +182,44 @@ export async function middleware(request: NextRequest) {
     return corsResponse;
   }
 
+  // Check admin routes protection BEFORE rate limiting
+  const adminRoutes = [/^\/admin(\/.*)?$/, /^\/api\/admin\//];
+  const isAdminRoute = adminRoutes.some(pattern => pattern.test(pathname));
+  
+  if (isAdminRoute) {
+    // Check if user has auth session using Supabase SSR client
+    const response = NextResponse.next();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return request.cookies.get(name)?.value;
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            response.cookies.set({ name, value, ...options });
+          },
+          remove(name: string, options: CookieOptions) {
+            response.cookies.set({ name, value: '', ...options });
+          },
+        },
+      }
+    );
+
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (error || !user) {
+      // Redirect to login with return URL
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    
+    // Pass the response with updated cookies
+    return response;
+  }
+
   // Skip rate limiting for certain paths
   const skipRateLimit = [
     '/api/stripe/webhook', // Stripe webhooks should not be rate limited

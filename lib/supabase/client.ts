@@ -1,6 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient as createSSRClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { env } from '@/lib/config/env';
 
 // Client-side Supabase client (for client components)
@@ -11,6 +9,10 @@ export const supabase = createClient(
 
 // Server-side client with authentication (recommended for API routes)
 export async function createAuthenticatedClient() {
+  // Dynamic import to avoid SSR issues
+  const { createServerClient: createSSRClient } = await import('@supabase/ssr');
+  const { cookies } = await import('next/headers');
+  
   const cookieStore = await cookies();
   
   return createSSRClient(
@@ -21,7 +23,7 @@ export async function createAuthenticatedClient() {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options: CookieOptions) {
+        set(name: string, value: string, options: Record<string, unknown>) {
           try {
             cookieStore.set({ name, value, ...options });
           } catch {
@@ -29,7 +31,7 @@ export async function createAuthenticatedClient() {
             console.warn('Failed to set cookie during SSR', { cookieName: name });
           }
         },
-        remove(name: string, options: CookieOptions) {
+        remove(name: string, options: Record<string, unknown>) {
           try {
             cookieStore.set({ name, value: '', ...options });
           } catch {
