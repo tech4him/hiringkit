@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { IntakeForm } from "@/components/kit/IntakeForm";
 import { KitPreview } from "@/components/kit/KitPreview";
 import { EditLiteForm } from "@/components/kit/EditLiteForm";
+import { ImprovedKitBuilder } from "@/components/kit/ImprovedKitBuilder";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEditLite } from "@/hooks/useEditLite";
 import { useRegenLimits } from "@/hooks/useRegenLimits";
@@ -207,71 +208,86 @@ function KitPageContent() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid lg:grid-cols-2 gap-6 h-[calc(100vh-120px)]">
-          {/* Left Pane - Conditional Form */}
-          <div className="bg-white rounded-lg shadow-sm border h-full overflow-hidden">
-            {!showEditLite ? (
-              <IntakeForm
-                data={intakeData}
-                onChange={handleIntakeChange}
-                onExpressGenerate={handleExpressGenerate}
-                onFullGenerate={handleFullGenerate}
-                isGenerating={isGenerating}
-                hasGenerated={hasGenerated}
-              />
-            ) : kit ? (
-              <EditLiteForm
-                kit={kit}
-                onInputUpdate={handleInputUpdate}
-                onSectionRegenerate={handleSectionRegenerate}
-                isUpdating={editLite?.isUpdating || false}
-                isPaid={Boolean(kit.order_id)}
-                onUnlock={() => {
-                  if (!kit?.id) {
-                    console.error('No kit ID available for checkout');
-                    alert('Please generate a kit first before proceeding to checkout.');
-                    return;
-                  }
-                  router.push(`/kit/${kit.id}/checkout`);
-                }}
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center">
-                <p className="text-gray-500">Loading edit interface...</p>
+      <div className="bg-white">
+        {!showEditLite ? (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="grid lg:grid-cols-2 gap-6 min-h-[calc(100vh-120px)]">
+              {/* Left Pane - Intake Form */}
+              <div className="bg-white rounded-lg shadow-sm border h-full overflow-hidden">
+                <IntakeForm
+                  data={intakeData}
+                  onChange={handleIntakeChange}
+                  onExpressGenerate={handleExpressGenerate}
+                  onFullGenerate={handleFullGenerate}
+                  isGenerating={isGenerating}
+                  hasGenerated={hasGenerated}
+                />
               </div>
-            )}
-          </div>
 
-          {/* Right Pane - Preview */}
-          <div className="bg-white rounded-lg shadow-sm border h-full overflow-hidden">
-            <KitPreview
-              artifacts={artifacts}
-              editedArtifacts={editedArtifacts}
-              isRegenerating={regenLimits ? {
-                scorecard: regenLimits.isRegenerating('scorecard'),
-                job_post: regenLimits.isRegenerating('job_post'),
-                interview_stage1: regenLimits.isRegenerating('interview_stage1'),
-                interview_stage2: regenLimits.isRegenerating('interview_stage2'),
-                interview_stage3: regenLimits.isRegenerating('interview_stage3'),
-                work_sample: regenLimits.isRegenerating('work_sample'),
-                reference_check: regenLimits.isRegenerating('reference_check'),
-                process_map: regenLimits.isRegenerating('process_map'),
-                eeo: regenLimits.isRegenerating('eeo'),
-              } : {}}
-              isGenerating={isGenerating}
-              hasGenerated={hasGenerated}
-              onUnlock={() => {
-                if (!kit?.id) {
-                  console.error('No kit ID available for checkout');
-                  alert('Please generate a kit first before proceeding to checkout.');
-                  return;
-                }
-                router.push(`/kit/${kit.id}/checkout`);
-              }}
-            />
+              {/* Right Pane - Preview */}
+              <div className="bg-white rounded-lg shadow-sm border h-full overflow-hidden">
+                <KitPreview
+                  artifacts={artifacts}
+                  editedArtifacts={editedArtifacts}
+                  isRegenerating={regenLimits ? {
+                    scorecard: regenLimits.isRegenerating('scorecard'),
+                    job_post: regenLimits.isRegenerating('job_post'),
+                    interview_stage1: regenLimits.isRegenerating('interview_stage1'),
+                    interview_stage2: regenLimits.isRegenerating('interview_stage2'),
+                    interview_stage3: regenLimits.isRegenerating('interview_stage3'),
+                    work_sample: regenLimits.isRegenerating('work_sample'),
+                    reference_check: regenLimits.isRegenerating('reference_check'),
+                    process_map: regenLimits.isRegenerating('process_map'),
+                    eeo: regenLimits.isRegenerating('eeo'),
+                  } : {}}
+                  isGenerating={isGenerating}
+                  hasGenerated={hasGenerated}
+                  onUnlock={() => {
+                    if (!kit?.id) {
+                      console.error('No kit ID available for checkout');
+                      alert('Please generate a kit first before proceeding to checkout.');
+                      return;
+                    }
+                    router.push(`/kit/${kit.id}/checkout`);
+                  }}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+        ) : kit ? (
+          <ImprovedKitBuilder
+            kit={kit}
+            artifacts={artifacts}
+            onInputUpdate={handleInputUpdate}
+            onSectionRegenerate={handleSectionRegenerate}
+            isUpdating={editLite?.isUpdating || false}
+            isPaid={Boolean(kit.order_id)}
+            editedArtifacts={editedArtifacts}
+            isRegenerating={regenLimits ? {
+              scorecard: regenLimits.isRegenerating('scorecard'),
+              job_post: regenLimits.isRegenerating('job_post'),
+              interview_stage1: regenLimits.isRegenerating('interview_stage1'),
+              interview_stage2: regenLimits.isRegenerating('interview_stage2'),
+              interview_stage3: regenLimits.isRegenerating('interview_stage3'),
+              work_sample: regenLimits.isRegenerating('work_sample'),
+              reference_check: regenLimits.isRegenerating('reference_check'),
+              process_map: regenLimits.isRegenerating('process_map'),
+              eeo: regenLimits.isRegenerating('eeo'),
+            } : {}}
+            onUnlock={() => {
+              if (!kit?.id) {
+                console.error('No kit ID available for checkout');
+                alert('Please generate a kit first before proceeding to checkout.');
+                return;
+              }
+              router.push(`/kit/${kit.id}/checkout`);
+            }}
+          />
+        ) : (
+          <div className="h-full flex items-center justify-center">
+            <p className="text-gray-500">Loading edit interface...</p>
+          </div>
+        )}
       </div>
     </div>
   );
