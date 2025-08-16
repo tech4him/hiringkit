@@ -803,9 +803,9 @@ function generateProcessMap(processMap: ProcessMap): string {
       ${(processMap.steps || []).map((step: ProcessStep, i: number) => `
         <div class="process-step keep-together" style="border: 1px solid #ddd; border-radius: 8px; page-break-inside: avoid; break-inside: avoid; margin-bottom: 24px; overflow: visible;">
           <div style="display: flex; align-items: center; padding: 12px 20px; background: #f8f9fa; border-bottom: 1px solid #ddd; border-radius: 8px 8px 0 0;">
-            <span style="background: #1F4B99; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-right: 12px;">
-              Step ${i + 1}
-            </span>
+            <div style="width: 48px; height: 48px; background: #1F4B99; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600; margin-right: 16px; flex-shrink: 0;">
+              ${i + 1}
+            </div>
             <h3 style="margin: 0; color: #1F4B99; flex: 1;">${step.name}</h3>
           </div>
           <div style="padding: 20px;">

@@ -475,7 +475,7 @@ function ProcessMapPreview({ processMap }: { processMap: ProcessMap }) {
       <div className="space-y-3">
         {processMap?.steps?.slice(0, 3).map((step, i: number) => (
           <div key={i} className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
-            <div className="w-8 h-8 bg-[#1F4B99] text-white rounded-full flex items-center justify-center text-sm font-medium">
+            <div className="w-12 h-12 bg-[#1F4B99] text-white rounded-full flex items-center justify-center text-lg font-semibold flex-shrink-0">
               {i + 1}
             </div>
             <div className="flex-1">
