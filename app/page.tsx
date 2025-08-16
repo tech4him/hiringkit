@@ -82,9 +82,9 @@ export default function Home() {
                 onChange={(e) => setRoleInput(e.target.value)}
                 placeholder="e.g., Program Manager, Youth Pastor, Office Admin"
                 aria-label="Enter role title"
-                className="flex-1 rounded-2xl border border-slate-300 px-4 py-3 h-14 text-base focus:border-primary focus-visible:ring-2 ring-offset-2"
+                className="flex-1 rounded-2xl border border-slate-300 px-4 h-14 text-base focus:border-primary focus-visible:ring-2 ring-offset-2"
               />
-              <Button type="submit" className="inline-flex items-center justify-center rounded-2xl bg-[#1F4B99] px-8 py-4 text-white font-semibold shadow hover:brightness-110 focus-visible:ring-2 ring-offset-2 whitespace-nowrap">
+              <Button type="submit" className="inline-flex items-center justify-center rounded-2xl bg-[#1F4B99] px-8 h-14 text-white font-semibold shadow hover:brightness-110 focus-visible:ring-2 ring-offset-2 whitespace-nowrap">
                 Generate Free Preview
               </Button>
             </div>
@@ -519,9 +519,9 @@ export default function Home() {
                 onChange={(e) => setRoleInput(e.target.value)}
                 placeholder="Enter any role title to start..."
                 aria-label="Enter role title for final CTA"
-                className="flex-1 h-14 text-base bg-white text-gray-900 border-0 rounded-2xl"
+                className="flex-1 px-4 h-14 text-base bg-white text-gray-900 border-0 rounded-2xl"
               />
-              <Button type="submit" className="inline-flex items-center justify-center rounded-2xl bg-white text-[#1F4B99] px-8 py-4 font-semibold shadow hover:bg-gray-50 whitespace-nowrap">
+              <Button type="submit" className="inline-flex items-center justify-center rounded-2xl bg-white text-[#1F4B99] px-8 h-14 font-semibold shadow hover:bg-gray-50 whitespace-nowrap">
                 Generate Free Preview
               </Button>
             </div>
