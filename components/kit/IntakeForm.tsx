@@ -51,7 +51,7 @@ export function IntakeForm({
             variant={mode === "express" ? "default" : "secondary"}
             size="sm"
             onClick={() => setMode("express")}
-            className="flex items-center gap-2"
+            className={`flex items-center gap-2 ${mode === "express" ? "text-white" : ""}`}
           >
             <Zap className="h-4 w-4" />
             Express Mode
@@ -60,7 +60,7 @@ export function IntakeForm({
             variant={mode === "detailed" ? "default" : "secondary"}
             size="sm"
             onClick={() => setMode("detailed")}
-            className="flex items-center gap-2"
+            className={`flex items-center gap-2 ${mode === "detailed" ? "text-white" : ""}`}
           >
             <Sparkles className="h-4 w-4" />
             Detailed
